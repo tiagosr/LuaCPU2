@@ -14,6 +14,20 @@ module microcode_rom #(
         4'h0,   // reg_c_read = unused
         3'h0,   // mem_op = no access
         3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MOVE_DONE = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h0,   // reg_c_read = unused
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
         2'h1,   // micro_branch = terminate
         2'h0,   // gc_step = no GC
         2'h0,   // stack_op = no change
@@ -1617,41 +1631,72 @@ module microcode_rom #(
         34'h0   // immediate = 0
     };
 
+    localparam DONE_OFFSET = 512;
+
     reg [ROM_WIDTH-1:0] rom_array [0:ROM_DEPTH-1];
 
     initial begin
+        for (int i = 0; i < ROM_DEPTH; i++) begin
+            rom_array[i] = NOP;
+        end
+
         rom_array[0]  = OP_MOVE;
+        rom_array[0 + DONE_OFFSET] = OP_MOVE_DONE;
         rom_array[1]  = OP_LOADI;
         rom_array[2]  = OP_LOADF;
         rom_array[3]  = OP_LOADK;
+        rom_array[3 + DONE_OFFSET] = OP_LOADK_DONE;
         rom_array[4]  = OP_LOADKX;
+        rom_array[4 + DONE_OFFSET] = OP_LOADKX_DONE;
         rom_array[5]  = OP_LOADFALSE;
         rom_array[6]  = OP_LFALSESKIP;
         rom_array[7]  = OP_LOADTRUE;
         rom_array[8]  = OP_LOADNIL;
         rom_array[9]  = OP_GETUPVAL;
+        rom_array[9 + DONE_OFFSET] = OP_GETUPVAL_DONE;
         rom_array[10] = OP_SETUPVAL;
+        rom_array[10 + DONE_OFFSET] = OP_SETUPVAL_DONE;
         rom_array[11] = OP_GETTABUP;
+        rom_array[11 + DONE_OFFSET] = OP_GETTABUP_DONE;
         rom_array[12] = OP_GETTABLE;
+        rom_array[12 + DONE_OFFSET] = OP_GETTABLE_DONE;
         rom_array[13] = OP_GETI;
+        rom_array[13 + DONE_OFFSET] = OP_GETI_DONE;
         rom_array[14] = OP_GETFIELD;
+        rom_array[14 + DONE_OFFSET] = OP_GETFIELD_DONE;
         rom_array[15] = OP_SETTABUP;
+        rom_array[15 + DONE_OFFSET] = OP_SETTABUP_DONE;
         rom_array[16] = OP_SETTABLE;
+        rom_array[16 + DONE_OFFSET] = OP_SETTABLE_DONE;
         rom_array[17] = OP_SETI;
+        rom_array[17 + DONE_OFFSET] = OP_SETI_DONE;
         rom_array[18] = OP_SETFIELD;
+        rom_array[18 + DONE_OFFSET] = OP_SETFIELD_DONE;
         rom_array[19] = OP_NEWTABLE;
+        rom_array[19 + DONE_OFFSET] = OP_NEWTABLE_DONE;
         rom_array[20] = OP_SELF;
+        rom_array[20 + DONE_OFFSET] = OP_SELF_DONE;
         rom_array[21] = OP_ADDI;
         rom_array[22] = OP_ADDK;
+        rom_array[22 + DONE_OFFSET] = OP_ADDK_DONE;
         rom_array[23] = OP_SUBK;
+        rom_array[23 + DONE_OFFSET] = OP_SUBK_DONE;
         rom_array[24] = OP_MULK;
+        rom_array[24 + DONE_OFFSET] = OP_MULK_DONE;
         rom_array[25] = OP_MODK;
+        rom_array[25 + DONE_OFFSET] = OP_MODK_DONE;
         rom_array[26] = OP_POWK;
+        rom_array[26 + DONE_OFFSET] = OP_POWK_DONE;
         rom_array[27] = OP_DIVK;
+        rom_array[27 + DONE_OFFSET] = OP_DIVK_DONE;
         rom_array[28] = OP_IDIVK;
+        rom_array[28 + DONE_OFFSET] = OP_IDIVK_DONE;
         rom_array[29] = OP_BANDK;
+        rom_array[29 + DONE_OFFSET] = OP_BANDK_DONE;
         rom_array[30] = OP_BORK;
+        rom_array[30 + DONE_OFFSET] = OP_BORK_DONE;
         rom_array[31] = OP_BXORK;
+        rom_array[31 + DONE_OFFSET] = OP_BXORK_DONE;
         rom_array[32] = OP_SHRI;
         rom_array[33] = OP_SHLI;
         rom_array[34] = OP_ADD;
@@ -1669,6 +1714,7 @@ module microcode_rom #(
         rom_array[46] = OP_MMBIN;
         rom_array[47] = OP_MMBINI;
         rom_array[48] = OP_MMBINK;
+        rom_array[48 + DONE_OFFSET] = OP_MMBINK_DONE;
         rom_array[49] = OP_UNM;
         rom_array[50] = OP_BNOT;
         rom_array[51] = OP_NOT;
@@ -1681,6 +1727,7 @@ module microcode_rom #(
         rom_array[58] = OP_LT;
         rom_array[59] = OP_LE;
         rom_array[60] = OP_EQK;
+        rom_array[60 + DONE_OFFSET] = OP_EQK_DONE;
         rom_array[61] = OP_EQI;
         rom_array[62] = OP_LTI;
         rom_array[63] = OP_LEI;
@@ -1689,8 +1736,11 @@ module microcode_rom #(
         rom_array[66] = OP_TEST;
         rom_array[67] = OP_TESTSET;
         rom_array[68] = OP_CALL;
+        rom_array[68 + DONE_OFFSET] = OP_CALL_DONE;
         rom_array[69] = OP_TAILCALL;
+        rom_array[69 + DONE_OFFSET] = OP_TAILCALL_DONE;
         rom_array[70] = OP_RETURN;
+        rom_array[70 + DONE_OFFSET] = OP_RETURN_DONE;
         rom_array[71] = OP_RETURN0;
         rom_array[72] = OP_RETURN1;
         rom_array[73] = OP_FORLOOP;
@@ -1699,16 +1749,12 @@ module microcode_rom #(
         rom_array[76] = OP_TFORCALL;
         rom_array[77] = OP_TFORLOOP;
         rom_array[78] = OP_SETLIST;
+        rom_array[78 + DONE_OFFSET] = OP_SETLIST_DONE;
         rom_array[79] = OP_CLOSURE;
+        rom_array[79 + DONE_OFFSET] = OP_CLOSURE_DONE;
         rom_array[80] = OP_VARARG;
         rom_array[81] = OP_VARARGPREP;
         rom_array[82] = OP_EXTRAARG;
-
-        for (int i = 0; i < ROM_DEPTH; i++) begin
-            if (rom_array[i] == 64'h0) begin
-                rom_array[i] = NOP;
-            end
-        end
     end
 
     assign data = rom_array[address];

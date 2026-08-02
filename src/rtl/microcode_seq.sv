@@ -74,6 +74,8 @@ module microcode_seq #(
         endcase
     end
 
+    localparam DONE_OFFSET = 512;
+
     reg [9:0] next_internal_addr;
     reg [4:0] next_alu_op;
     reg [3:0] next_reg_a_write;
@@ -132,7 +134,6 @@ module microcode_seq #(
                     end
                 end
                 1'b1: begin
-                    next_internal_addr = rom_address + 1;
                     next_alu_op = rom_alu_op;
                     next_reg_a_write = rom_reg_a_write;
                     next_reg_b_read = rom_reg_b_read;
@@ -150,7 +151,7 @@ module microcode_seq #(
 
                     case (rom_micro_branch)
                         2'h0: begin
-                            next_internal_addr = rom_address + 1;
+                            next_internal_addr = rom_address + DONE_OFFSET;
                             next_micro_active = micro_active;
                             next_micro_done = micro_done;
                         end

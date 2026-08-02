@@ -13,12 +13,13 @@ The intention is to learn what are the processes that avoid "agent orchestration
 See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
-- CPU top-level module with integrated register cache, microcode sequencer, stack pointer, and instruction ROM
+- CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
+- Register write path timing synchronization (bus request persistence across micro-op boundaries)
 
 ### 🔜 Next Steps
-- Implement OP_MOVE, OP_LOADI, OP_LOADK execution
-- Implement OP_LOADKX, OP_LOADFALSE, OP_LOADTRUE, OP_LOADNIL
-- Implement ALU datapath for arithmetic and bitwise operations
+- Fix register write path timing to enable OP_LOADKX, OP_LOADFALSE, OP_LOADTRUE, OP_LOADNIL execution
+- Implement ALU datapath for arithmetic and bitwise operations (OP_ADD, OP_ADDI, OP_ADDK, OP_SUB, OP_SUBI, OP_SUBK)
+- Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

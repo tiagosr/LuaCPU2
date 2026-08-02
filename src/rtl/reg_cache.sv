@@ -7,6 +7,7 @@ module reg_cache #(
     input  wire [31:0] wb,
 
     input  wire [7:0] operand_offset,
+    input  wire [7:0] write_offset,
 
     input  wire read_req,
     output reg read_valid,
@@ -36,6 +37,7 @@ module reg_cache #(
     reg [4:0] cache_lru [0:CACHE_SIZE - 1];
 
     reg [31:0] stack_addr;
+    reg [31:0] write_addr;
     reg [4:0] lru_max;
     reg [4:0] hit_idx;
     reg hit_found;
@@ -81,6 +83,7 @@ module reg_cache #(
         if (reset) begin
         end else begin
             stack_addr = wb + {24'h000000, operand_offset};
+            write_addr = wb + {24'h000000, write_offset};
 
             read_valid = 0;
             write_bus_req = 0;
@@ -111,11 +114,11 @@ module reg_cache #(
                     end
                 end else if (write_req) begin
                     write_bus_req = 1;
-                    write_bus_addr = stack_addr;
+                    write_bus_addr = write_addr;
                     write_bus_data = write_data;
                     hit_found = 0;
                     for (int i = 0; i < CACHE_SIZE; i = i + 1) begin
-                        if (cache_valid[i] && cache_addr[i] == stack_addr) begin
+                        if (cache_valid[i] && cache_addr[i] == write_addr) begin
                             hit_found = 1;
                             hit_idx = i[4:0];
                             cache_data[i] = write_data;
@@ -137,7 +140,7 @@ module reg_cache #(
                             end
                         end
                         cache_data[evict_idx] = write_data;
-                        cache_addr[evict_idx] = stack_addr;
+                        cache_addr[evict_idx] = write_addr;
                         cache_valid[evict_idx] = 1;
                         cache_lru[evict_idx] = current_lru_max + 1;
                         if (current_lru_max + 1 > lru_max) begin
