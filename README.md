@@ -13,13 +13,12 @@ The intention is to learn what are the processes that avoid "agent orchestration
 See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
-- CPU top-level module scaffolding at src/rtl/cpu.sv (submodules to be implemented)
+- CPU top-level module with integrated register cache, microcode sequencer, stack pointer, and instruction ROM
 
 ### 🔜 Next Steps
-- Implement register write-thru cache and register load/store microcode
-- Implement stack pointer
-- Implement instruction fetcher and pre-fetcher
-- Implement OP_MOVE, OP_LOADI, OP_LOADK
+- Implement OP_MOVE, OP_LOADI, OP_LOADK execution
+- Implement OP_LOADKX, OP_LOADFALSE, OP_LOADTRUE, OP_LOADNIL
+- Implement ALU datapath for arithmetic and bitwise operations
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

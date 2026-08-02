@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 VERILATOR := verilator
 
-CPU_SRC := ../src/rtl/cpu.sv
+CPU_SRC := ../src/rtl/cpu.sv ../src/rtl/reg_cache.sv ../src/rtl/microcode_rom.sv ../src/rtl/microcode_seq.sv ../src/rtl/stack_ptr.sv ../src/rtl/instr_rom.sv
 TB_SRC := cpu_tb.sv
 MEM_SRC := mem_model.sv
 UART_SRC := uart_model.sv
