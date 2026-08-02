@@ -13,16 +13,14 @@ The intention is to learn what are the processes that avoid "agent orchestration
 See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
-- Nothing at the moment
+- CPU top-level module scaffolding at src/rtl/cpu.sv (submodules to be implemented)
 
 ### 🔜 Next Steps
-- Implement CPU module scaffolding, with clock, reset circuit and external memory interface
-- Implement `verilator` test suite scaffolding
 - Implement register write-thru cache and register load/store microcode
 - Implement stack pointer
 - Implement instruction fetcher and pre-fetcher
 - Implement OP_MOVE, OP_LOADI, OP_LOADK
 
-### 📔 Backlog (issues identified during implementation for later priorization)
-- Still in the beginning of the implementation
+### 📔 Backlog
+- Verilog lint/typecheck setup
 
