@@ -11,6 +11,7 @@ module microcode_seq #(
     input  wire [7:0] instr_c,
     input  wire [16:0] instr_bx,
     input  wire instr_k,
+    input  wire [24:0] instr_ax,
 
     input  wire [9:0] rom_address,
     input  wire [63:0] rom_data,
@@ -63,6 +64,8 @@ module microcode_seq #(
         case (opcode_key)
             7'h01: immediate_source = {17'h00000, instr_bx};
             7'h02: immediate_source = {17'h00000, instr_bx};
+            7'h04: immediate_source = {9'h0, instr_ax};
+            7'h15: immediate_source = {26'h0000000000, instr_c};
             7'h21: immediate_source = {26'h0000000000, instr_c};
             7'h20: immediate_source = {26'h0000000000, instr_c};
             7'h56: immediate_source = {17'h00000, instr_bx};

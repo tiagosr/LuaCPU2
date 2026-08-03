@@ -26,25 +26,27 @@ module mem_model #(
         end
     end
 
-    // Ready signal (1 cycle latency)
+    // Ready signal (1 when idle)
     assign rdy = ~bus_busy;
 
-    // Ack signal (asserted on the cycle after transfer)
+    // Ack signal (1 when busy - transfer in progress)
     assign ack = bus_busy;
 
-    // Read data output
+    // Read data output (valid when transfer complete)
     assign data_out = (bus_busy && ~pending_wr) ? memory[pending_addr] : 32'h0;
 
-    // Bus handshake
+    // Bus handshake: 2-cycle latency
+    // Cycle N: req asserted, memory accepts (bus_busy=1, stores pending)
+    // Cycle N+1: memory performs transfer, ack=1
     always @(posedge clk) begin
         if (req && rdy) begin
             bus_busy = 1;
             pending_addr = addr;
             pending_wr = wr;
-            if (wr) begin
-                memory[addr] = data_in;
-            end
         end else if (bus_busy) begin
+            if (pending_wr) begin
+                memory[pending_addr] = data_in;
+            end
             bus_busy = 0;
         end
     end

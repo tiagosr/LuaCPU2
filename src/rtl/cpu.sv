@@ -38,6 +38,7 @@ module cpu #(
     reg [16:0] instr_bx;
     reg instr_k;
     reg [6:0] opcode_key;
+    reg [24:0] instr_ax;
 
     // Bus controller state
     reg bus_state_idle;
@@ -48,6 +49,7 @@ module cpu #(
     reg bus_req_reg_cache;
     reg bus_req_ktable;
     reg bus_req_direct;
+    reg bus_req_direct_pending;
 
     // GC state
     reg gc_state_idle;
@@ -131,14 +133,17 @@ module cpu #(
             instr_bx <= 0;
             instr_k <= 0;
             opcode_key <= 0;
+            instr_ax <= 0;
         end else if (!reg_cache_stall && !microcode_micro_active && !ktable_read_waiting) begin
             ir <= instr_rom_data;
             instr_a <= ir[31:24];
             instr_b <= ir[23:16];
             instr_c <= ir[15:8];
-            instr_bx <= ir[23:7];
+            instr_bx <= {ir[23], ir[15:0]};
             instr_k <= ir[6];
             opcode_key <= ir[22:16];
+        end else if (!reg_cache_stall && microcode_micro_active && !ktable_read_waiting && opcode_key == 7'h04) begin
+            instr_ax <= instr_rom_data[24:0];
         end
     end
 
@@ -220,6 +225,7 @@ module cpu #(
         .instr_c(instr_c),
         .instr_bx(instr_bx),
         .instr_k(instr_k),
+        .instr_ax(instr_ax),
         .rom_address(microcode_rom_addr),
         .rom_data(microcode_rom_data),
         .alu_op(microcode_alu_op),
@@ -284,7 +290,7 @@ module cpu #(
         end
     end
 
-    // Bus controller
+    // Unified bus controller and result commit logic
     always @(posedge clk) begin
         if (reset) begin
             bus_state_idle <= 1;
@@ -294,14 +300,29 @@ module cpu #(
             bus_data_out <= 0;
             bus_req <= 0;
             bus_wr <= 0;
-            bus_req_reg_cache <= 0;
             bus_req_ktable <= 0;
+            reg_cache_read_req <= 0;
+            result_commit <= 0;
+            result_commit_data <= 0;
+            result_commit_offset <= 0;
         end else if (halt_flag || error_flag) begin
             bus_state_idle <= 1;
             bus_state_req <= 0;
             bus_state_wait <= 0;
             bus_req <= 0;
+            reg_cache_read_req <= 0;
+            result_commit <= 0;
         end else begin
+            reg_cache_read_req <= 0;
+            result_commit <= 0;
+
+            // Register cache read request
+            if (microcode_micro_active && microcode_enable && !ktable_read_waiting && microcode_reg_a_write == 4'h0 && microcode_reg_b_read != 4'h0) begin
+                reg_cache_read_req <= 1;
+                reg_cache_read_offset <= reg_cache_read_offset_wire;
+            end
+
+            // Bus state machine
             if (bus_state_idle) begin
                 if (ktable_read_waiting) begin
                     bus_addr <= KTABLE_BASE + microcode_immediate[15:0];
@@ -310,28 +331,49 @@ module cpu #(
                     bus_state_idle <= 0;
                     bus_state_req <= 1;
                     bus_req_ktable <= 1;
-                    bus_req_reg_cache <= 0;
-                    bus_req_direct <= 0;
-                end else if (bus_req_direct) begin
-                    bus_addr <= result_commit_offset + stack_ptr_wb;
-                    bus_data_out <= result_commit_data[31:0];
-                    bus_wr <= 1;
-                    bus_req <= 1;
-                    bus_state_idle <= 0;
-                    bus_state_req <= 1;
-                    bus_req_direct <= 1;
-                    bus_req_reg_cache <= 0;
-                    bus_req_ktable <= 0;
-                end else if (reg_cache_write_bus_req) begin
-                    bus_addr <= reg_cache_write_bus_addr;
-                    bus_data_out <= reg_cache_write_bus_data[31:0];
-                    bus_wr <= 1;
-                    bus_req <= 1;
-                    bus_state_idle <= 0;
-                    bus_state_req <= 1;
-                    bus_req_reg_cache <= 1;
-                    bus_req_ktable <= 0;
-                    bus_req_direct <= 0;
+                end else if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
+                    // Direct commit write
+                    if (microcode_mem_op == 3'h1 && ktable_read_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= {ktable_read_data, ktable_read_data}[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_state_idle <= 0;
+                        bus_state_req <= 1;
+                        result_commit_offset <= instr_a;
+                        result_commit_data <= {ktable_read_data, ktable_read_data};
+                        result_commit <= 1;
+                    end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= alu_result[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_state_idle <= 0;
+                        bus_state_req <= 1;
+                        result_commit_offset <= instr_a;
+                        result_commit_data <= alu_result;
+                        result_commit <= 1;
+                    end else if (reg_cache_read_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= reg_cache_read_data[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_state_idle <= 0;
+                        bus_state_req <= 1;
+                        result_commit_offset <= instr_a;
+                        result_commit_data <= reg_cache_read_data;
+                        result_commit <= 1;
+                    end else if (value_conv_load_value_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= value_conv_load_value[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_state_idle <= 0;
+                        bus_state_req <= 1;
+                        result_commit_offset <= instr_a;
+                        result_commit_data <= value_conv_load_value;
+                        result_commit <= 1;
+                    end
                 end
             end else if (bus_state_req) begin
                 if (bus_rdy) begin
@@ -339,54 +381,11 @@ module cpu #(
                     bus_state_wait <= 1;
                 end
             end else if (bus_state_wait) begin
-                if (bus_ack && bus_rdy) begin
+                if (bus_ack) begin
                     bus_state_wait <= 0;
                     bus_req <= 0;
                     bus_state_idle <= 1;
                     bus_req_ktable <= 0;
-                    bus_req_reg_cache <= 0;
-                end
-            end
-        end
-    end
-
-    // Register cache read and result commit logic
-    always @(posedge clk) begin
-        if (reset) begin
-            reg_cache_read_req <= 0;
-            result_commit <= 0;
-            result_commit_data <= 0;
-            result_commit_offset <= 0;
-            bus_req_direct <= 0;
-        end else begin
-            reg_cache_read_req <= 0;
-            result_commit <= 0;
-            bus_req_direct <= 0;
-
-            if (microcode_micro_active && microcode_enable && !ktable_read_waiting && microcode_reg_b_read == 4'h1 && microcode_reg_a_write == 4'h0) begin
-                reg_cache_read_req <= 1;
-                reg_cache_read_offset <= instr_b;
-            end
-
-            if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0 && microcode_reg_b_read == 4'h0) begin
-                if (microcode_mem_op == 3'h1) begin
-                    if (ktable_read_valid) begin
-                        result_commit_offset <= instr_a;
-                        result_commit_data <= {ktable_read_data, ktable_read_data};
-                        bus_req_direct <= 1;
-                    end
-                end else if (microcode_alu_op != 5'h0) begin
-                    result_commit_offset <= instr_a;
-                    result_commit_data <= alu_result;
-                    bus_req_direct <= 1;
-                end else if (reg_cache_read_valid) begin
-                    result_commit_offset <= instr_a;
-                    result_commit_data <= reg_cache_read_data;
-                    bus_req_direct <= 1;
-                end else begin
-                    result_commit_offset <= instr_a;
-                    result_commit_data <= value_conv_load_value;
-                    bus_req_direct <= 1;
                 end
             end
         end

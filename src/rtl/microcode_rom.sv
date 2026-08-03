@@ -120,6 +120,34 @@ module microcode_rom #(
     };
 
     localparam [63:0] OP_LOADNIL = {
+        5'h4,   // alu_op = load nil
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h0,   // reg_c_read = unused
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_LOADNIL_STEP = {
+        5'h4,   // alu_op = load nil
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h0,   // reg_c_read = unused
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_LOADNIL_DONE = {
         5'h0,   // alu_op = pass
         4'h0,   // reg_a_write = window index A
         4'h0,   // reg_b_read = unused
@@ -130,7 +158,7 @@ module microcode_rom #(
         2'h0,   // gc_step = no GC
         2'h0,   // stack_op = no change
         1'h1,   // enable = 1
-        34'h0   // immediate = placeholder
+        34'h0   // immediate = 0
     };
 
     localparam [63:0] OP_LFALSESKIP = {
@@ -1607,7 +1635,7 @@ module microcode_rom #(
         5'h0,   // alu_op = pass
         4'h0,   // reg_a_write = window index A
         4'h0,   // reg_b_read = unused
-        4'h0,   // reg_c_read = unused
+        4'h3,   // reg_c_read = ktable index
         3'h1,   // mem_op = read ktable
         3'h0,   // pc_op = no change
         2'h0,   // micro_branch = continue
@@ -1652,6 +1680,8 @@ module microcode_rom #(
         rom_array[6]  = OP_LFALSESKIP;
         rom_array[7]  = OP_LOADTRUE;
         rom_array[8]  = OP_LOADNIL;
+        rom_array[8 + DONE_OFFSET] = OP_LOADNIL_STEP;
+        rom_array[8 + 2 * DONE_OFFSET] = OP_LOADNIL_DONE;
         rom_array[9]  = OP_GETUPVAL;
         rom_array[9 + DONE_OFFSET] = OP_GETUPVAL_DONE;
         rom_array[10] = OP_SETUPVAL;

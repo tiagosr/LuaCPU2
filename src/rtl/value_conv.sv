@@ -29,16 +29,41 @@ module value_conv #(
 
     always_comb begin
         next_load_value = 64'h0;
-        next_load_value_valid = 1'b1;
+        next_load_value_valid = 1'b0;
 
         case (alu_op)
             5'h0: begin
-                // pass / load operations - use immediate
+                // pass / load integer from immediate
                 if (immediate[16] == 1'b1) begin
                     next_load_value = {NaN_UPPER, TAG_INTEGER, {16{immediate[16]}}, immediate[15:0]};
                 end else begin
                     next_load_value = {NaN_UPPER, TAG_INTEGER, immediate[15:0]};
                 end
+                next_load_value_valid = 1'b1;
+            end
+            5'h2: begin
+                // load true
+                next_load_value = {NaN_UPPER, TAG_TRUE, 32'h00000001};
+                next_load_value_valid = 1'b1;
+            end
+            5'h3: begin
+                // load false
+                next_load_value = {NaN_UPPER, TAG_FALSE, 32'h00000000};
+                next_load_value_valid = 1'b1;
+            end
+            5'h4: begin
+                // load nil
+                next_load_value = {NaN_UPPER, TAG_NIL, 32'h00000000};
+                next_load_value_valid = 1'b1;
+            end
+            5'h5: begin
+                // load integer from immediate
+                if (immediate[16] == 1'b1) begin
+                    next_load_value = {NaN_UPPER, TAG_INTEGER, {16{immediate[16]}}, immediate[15:0]};
+                end else begin
+                    next_load_value = {NaN_UPPER, TAG_INTEGER, immediate[15:0]};
+                end
+                next_load_value_valid = 1'b1;
             end
             default: begin
                 next_load_value = ktable_data;
