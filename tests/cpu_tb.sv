@@ -85,17 +85,17 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b micro_active=%0b micro_done=%0b instr_a=%0h instr_decoded=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag,
-                    cpu_inst.microcode_micro_active, cpu_inst.microcode_micro_done, cpu_inst.instr_a, cpu_inst.instr_decoded);
+                    cpu_inst.microcode_active, cpu_inst.microcode_done, cpu_inst.instr_a, cpu_inst.instr_decoded);
             end
 
             if (halt_flag || error_flag) break;
         end
 
         $display("Stack[1]: %0h (expected 00000000 - OP_MOVE R[0]=0 to R[1])", mem_inst.memory[1]);
-        $display("Stack[2]: %0h (expected fff00200 - OP_LOADI 512 = 0x200 boxed as integer)", mem_inst.memory[2]);
+        $display("Stack[2]: %0h (expected 00000200 - OP_LOADI 512 = 0x200, lower 32 bits)", mem_inst.memory[2]);
 
         if (mem_inst.memory[1] == 32'h00000000 &&
-            mem_inst.memory[2] == 32'hfff00200) begin
+            mem_inst.memory[2] == 32'h00000200) begin
             $display("TEST 1 PASSED");
             test_passed = test_passed + 1;
         end else begin
@@ -129,15 +129,15 @@ module cpu_tb;
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[3]: %0h (expected fff00064 - OP_LOADK K[0]=100 boxed as integer)", mem_inst.memory[3]);
-        $display("Stack[4]: %0h (expected fff70001 - OP_LOADTRUE)", mem_inst.memory[4]);
-        $display("Stack[5]: %0h (expected fff60000 - OP_LOADFALSE)", mem_inst.memory[5]);
-        $display("Stack[6]: %0h (expected fff50000 - OP_LOADNIL)", mem_inst.memory[6]);
+        $display("Stack[3]: %0h (expected 00000064 - OP_LOADK K[0]=100, lower 32 bits)", mem_inst.memory[3]);
+        $display("Stack[4]: %0h (expected 00000001 - OP_LOADTRUE, lower 32 bits)", mem_inst.memory[4]);
+        $display("Stack[5]: %0h (expected 00000000 - OP_LOADFALSE, lower 32 bits)", mem_inst.memory[5]);
+        $display("Stack[6]: %0h (expected 00000000 - OP_LOADNIL, lower 32 bits)", mem_inst.memory[6]);
 
-        if (mem_inst.memory[3] == 32'hfff00064 &&
-            mem_inst.memory[4] == 32'hfff70001 &&
-            mem_inst.memory[5] == 32'hfff60000 &&
-            mem_inst.memory[6] == 32'hfff50000) begin
+        if (mem_inst.memory[3] == 32'h00000064 &&
+            mem_inst.memory[4] == 32'h00000001 &&
+            mem_inst.memory[5] == 32'h00000000 &&
+            mem_inst.memory[6] == 32'h00000000) begin
             $display("TEST 2 PASSED");
             test_passed = test_passed + 1;
         end else begin

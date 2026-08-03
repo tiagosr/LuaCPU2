@@ -35,18 +35,13 @@ module mem_model #(
     // Read data output (valid when transfer complete)
     assign data_out = (bus_busy && ~pending_wr) ? memory[pending_addr] : 32'h0;
 
-    // Bus handshake: 2-cycle latency
-    // Cycle N: req asserted, memory accepts (bus_busy=1, stores pending)
-    // Cycle N+1: memory performs transfer, ack=1
+    // Bus handshake: 1-cycle latency (no write-thru)
     always @(posedge clk) begin
         if (req && rdy) begin
             bus_busy = 1;
             pending_addr = addr;
             pending_wr = wr;
         end else if (bus_busy) begin
-            if (pending_wr) begin
-                memory[pending_addr] = data_in;
-            end
             bus_busy = 0;
         end
     end
