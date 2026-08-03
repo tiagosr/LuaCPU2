@@ -34,13 +34,16 @@ module value_conv #(
 
         case (alu_op)
             5'h0: begin
-                // pass / load integer from immediate
-                if (immediate[16] == 1'b1) begin
-                    next_load_value = {NaN_UPPER, TAG_INTEGER, {16{immediate[16]}}, immediate[15:0]};
+                if (immediate != 34'h0) begin
+                    if (immediate[16] == 1'b1) begin
+                        next_load_value = {NaN_UPPER, TAG_INTEGER, {16{immediate[16]}}, immediate[15:0]};
+                    end else begin
+                        next_load_value = {NaN_UPPER, TAG_INTEGER, immediate[15:0]};
+                    end
+                    next_load_value_valid = 1'b1;
                 end else begin
-                    next_load_value = {NaN_UPPER, TAG_INTEGER, immediate[15:0]};
+                    next_load_value_valid = 1'b0;
                 end
-                next_load_value_valid = 1'b1;
             end
             5'h2: begin
                 // load true

@@ -12,6 +12,7 @@ module microcode_seq #(
     input  wire [16:0] instr_bx,
     input  wire instr_k,
     input  wire [24:0] instr_ax,
+    input  wire instr_decoded,
 
     input  wire [9:0] rom_address,
     input  wire [63:0] rom_data,
@@ -71,6 +72,11 @@ module microcode_seq #(
             7'h15: immediate_source = {26'h0000000000, instr_c};
             7'h21: immediate_source = {26'h0000000000, instr_c};
             7'h20: immediate_source = {26'h0000000000, instr_c};
+            7'h3D: immediate_source = {26'h0000000000, instr_c};
+            7'h3E: immediate_source = {26'h0000000000, instr_c};
+            7'h3F: immediate_source = {26'h0000000000, instr_c};
+            7'h40: immediate_source = {26'h0000000000, instr_c};
+            7'h41: immediate_source = {26'h0000000000, instr_c};
             7'h56: immediate_source = {17'h00000, instr_bx};
             7'h73: immediate_source = {17'h00000, instr_bx};
             7'h74: immediate_source = {17'h00000, instr_bx};
@@ -97,6 +103,18 @@ module microcode_seq #(
     reg next_micro_active;
     reg next_micro_done;
     reg [9:0] next_branch_target;
+    reg micro_done_prev;
+    reg instr_decoded_prev;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            micro_done_prev <= 1'b0;
+            instr_decoded_prev <= 1'b0;
+        end else begin
+            micro_done_prev <= micro_done;
+            instr_decoded_prev <= instr_decoded;
+        end
+    end
 
     always_comb begin
         if (reset) begin
@@ -118,25 +136,43 @@ module microcode_seq #(
         end else begin
             case (micro_active)
                 1'b0: begin
-                    next_internal_addr = {3'h0, opcode_key[6:0]};
-                    next_alu_op = rom_alu_op;
-                    next_reg_a_write = rom_reg_a_write;
-                    next_reg_b_read = rom_reg_b_read;
-                    next_reg_c_read = rom_reg_c_read;
-                    next_mem_op = rom_mem_op;
-                    next_pc_op = rom_pc_op;
-                    next_micro_branch = rom_micro_branch;
-                    next_gc_step = rom_gc_step;
-                    next_stack_op = rom_stack_op;
-                    next_enable = rom_enable;
-                    next_immediate = immediate_source;
-                    next_micro_active = 1'b1;
-                    next_micro_done = 1'b0;
-                    next_branch_target = 10'h0;
+                    if (instr_decoded_prev) begin
+                        next_internal_addr = {3'h0, opcode_key[6:0]};
+                        next_alu_op = rom_alu_op;
+                        next_reg_a_write = rom_reg_a_write;
+                        next_reg_b_read = rom_reg_b_read;
+                        next_reg_c_read = rom_reg_c_read;
+                        next_mem_op = rom_mem_op;
+                        next_pc_op = rom_pc_op;
+                        next_micro_branch = rom_micro_branch;
+                        next_gc_step = rom_gc_step;
+                        next_stack_op = rom_stack_op;
+                        next_enable = rom_enable;
+                        next_immediate = immediate_source;
+                        next_micro_active = 1'b1;
+                        next_micro_done = 1'b0;
+                        next_branch_target = 10'h0;
 
-                    if (rom_micro_branch == 2'h1) begin
+                        if (rom_micro_branch == 2'h1) begin
+                            next_micro_active = 1'b1;
+                            next_micro_done = 1'b1;
+                        end
+                    end else begin
+                        next_internal_addr = rom_address;
+                        next_alu_op = rom_alu_op;
+                        next_reg_a_write = rom_reg_a_write;
+                        next_reg_b_read = rom_reg_b_read;
+                        next_reg_c_read = rom_reg_c_read;
+                        next_mem_op = rom_mem_op;
+                        next_pc_op = rom_pc_op;
+                        next_micro_branch = rom_micro_branch;
+                        next_gc_step = rom_gc_step;
+                        next_stack_op = rom_stack_op;
+                        next_enable = rom_enable;
+                        next_immediate = immediate_source;
                         next_micro_active = 1'b0;
                         next_micro_done = 1'b1;
+                        next_branch_target = 10'h0;
                     end
                 end
                 1'b1: begin
@@ -164,7 +200,7 @@ module microcode_seq #(
                             2'h0: begin
                                 next_internal_addr = rom_address + DONE_OFFSET;
                                 next_micro_active = micro_active;
-                                next_micro_done = micro_done;
+                                next_micro_done = 1'b0;
                             end
                             2'h1: begin
                                 next_internal_addr = rom_address;
@@ -174,7 +210,7 @@ module microcode_seq #(
                             2'h2: begin
                                 next_internal_addr = rom_address + 1;
                                 next_micro_active = micro_active;
-                                next_micro_done = micro_done;
+                                next_micro_done = 1'b0;
                                 next_branch_target = immediate_source[9:0];
                             end
                             2'h3: begin
@@ -185,7 +221,7 @@ module microcode_seq #(
                             default: begin
                                 next_internal_addr = rom_address + 1;
                                 next_micro_active = micro_active;
-                                next_micro_done = micro_done;
+                                next_micro_done = 1'b0;
                             end
                         endcase
                     end

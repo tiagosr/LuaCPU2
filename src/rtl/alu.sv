@@ -162,7 +162,7 @@ module alu #(
 
     always_comb begin
         next_result = 64'h0;
-        next_result_valid = 1'b1;
+        next_result_valid = 1'b0;
         next_zero_flag = 1'b0;
         next_div_zero_flag = 1'b0;
         next_type_error_flag = 1'b0;
@@ -174,6 +174,7 @@ module alu #(
             end
 
             OP_ADD: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) + unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) + unbox_payload(operand_b) == 32'h0);
@@ -193,6 +194,7 @@ module alu #(
             end
 
             OP_SUB: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) - unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) - unbox_payload(operand_b) == 32'h0);
@@ -211,6 +213,7 @@ module alu #(
             end
 
             OP_MUL: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) * unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) * unbox_payload(operand_b) == 32'h0);
@@ -229,6 +232,7 @@ module alu #(
             end
 
             OP_DIV: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     if (unbox_payload(operand_b) == 32'h0) begin
                         next_div_zero_flag = 1'b1;
@@ -252,6 +256,7 @@ module alu #(
             end
 
             OP_MOD: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     if (unbox_payload(operand_b) == 32'h0) begin
                         next_div_zero_flag = 1'b1;
@@ -266,6 +271,7 @@ module alu #(
             end
 
             OP_POW: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) ** unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) ** unbox_payload(operand_b) == 32'h0);
@@ -276,6 +282,7 @@ module alu #(
             end
 
             OP_IDIV: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     if (unbox_payload(operand_b) == 32'h0) begin
                         next_div_zero_flag = 1'b1;
@@ -290,6 +297,7 @@ module alu #(
             end
 
             OP_NEG: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a)) begin
                     next_result = nan_box_integer(-unbox_payload(operand_a));
                     next_zero_flag = (-unbox_payload(operand_a) == 32'h0);
@@ -302,11 +310,13 @@ module alu #(
             end
 
             OP_NOT: begin
+                next_result_valid = 1'b1;
                 next_result = nan_box_bool(!is_truthy(operand_a));
                 next_zero_flag = 1'b0;
             end
 
             OP_BNOT: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a)) begin
                     next_result = nan_box_integer(~unbox_payload(operand_a));
                     next_zero_flag = (~unbox_payload(operand_a) == 32'h0);
@@ -316,6 +326,7 @@ module alu #(
             end
 
             OP_AND: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) & unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) & unbox_payload(operand_b) == 32'h0);
@@ -325,6 +336,7 @@ module alu #(
             end
 
             OP_OR: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) | unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) | unbox_payload(operand_b) == 32'h0);
@@ -334,6 +346,7 @@ module alu #(
             end
 
             OP_XOR: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) ^ unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) ^ unbox_payload(operand_b) == 32'h0);
@@ -343,6 +356,7 @@ module alu #(
             end
 
             OP_SHL: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) << (unbox_payload(operand_b) & 31'h1F));
                     next_zero_flag = (unbox_payload(operand_a) << (unbox_payload(operand_b) & 31'h1F) == 32'h0);
@@ -352,6 +366,7 @@ module alu #(
             end
 
             OP_SHR: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) >> (unbox_payload(operand_b) & 31'h1F));
                     next_zero_flag = (unbox_payload(operand_a) >> (unbox_payload(operand_b) & 31'h1F) == 32'h0);
@@ -361,11 +376,13 @@ module alu #(
             end
 
             OP_TEST: begin
+                next_result_valid = 1'b1;
                 next_result = nan_box_bool(!is_truthy(operand_a));
                 next_zero_flag = 1'b0;
             end
 
             OP_CMP_EQ: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_bool(unbox_payload(operand_a) == unbox_payload(operand_b));
                 end else if (is_boolean(operand_a) && is_boolean(operand_b)) begin
@@ -379,6 +396,7 @@ module alu #(
             end
 
             OP_CMP_LT: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_bool($signed(unbox_payload(operand_a)) < $signed(unbox_payload(operand_b)));
                 end else if (is_double(operand_a) || is_double(operand_b)) begin
@@ -390,6 +408,7 @@ module alu #(
             end
 
             OP_CMP_LE: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_bool($signed(unbox_payload(operand_a)) <= $signed(unbox_payload(operand_b)));
                 end else if (is_double(operand_a) || is_double(operand_b)) begin
@@ -401,6 +420,7 @@ module alu #(
             end
 
             OP_CMP_GT: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_bool($signed(unbox_payload(operand_a)) > $signed(unbox_payload(operand_b)));
                 end else if (is_double(operand_a) || is_double(operand_b)) begin
@@ -412,6 +432,7 @@ module alu #(
             end
 
             OP_CMP_GE: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_bool($signed(unbox_payload(operand_a)) >= $signed(unbox_payload(operand_b)));
                 end else if (is_double(operand_a) || is_double(operand_b)) begin
@@ -423,16 +444,19 @@ module alu #(
             end
 
             OP_LEN: begin
+                next_result_valid = 1'b1;
                 next_result = nan_box_integer(32'h0);
                 next_zero_flag = 1'b1;
             end
 
             OP_CONCAT: begin
+                next_result_valid = 1'b1;
                 next_result = operand_a;
                 next_zero_flag = (operand_a[31:0] == 32'h0);
             end
 
             OP_FORLOOP: begin
+                next_result_valid = 1'b1;
                 if (is_integer(operand_a) && is_integer(operand_b)) begin
                     next_result = nan_box_integer(unbox_payload(operand_a) + unbox_payload(operand_b));
                     next_zero_flag = (unbox_payload(operand_a) + unbox_payload(operand_b) == 32'h0);

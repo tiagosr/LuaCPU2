@@ -1,7 +1,7 @@
 ### 🧪 Test Results
-- 2 tests (OP_MOVE/OP_LOADI/OP_RETURN1 and OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL) - OP_MOVE now writes correct data to stack[1]=0, but OP_LOADI still fails (stack[2]=0 instead of 0x200) due to instr_a being stale during microcode execution; PC advances correctly through instructions
-- Fixed: microcode sequencer stall on reg_cache miss, sequencer address output for ROM addressing, bus controller direct memory writes
-- Identified: instr_a operand is stale during microcode execution because decode happens after microcode starts; need to ensure decode completes before microcode uses operands
+- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing due to Verilator --timing registered signal alignment issues; bus controller writes to wrong addresses, PC advances incorrectly
+- Fixed: bus controller handles reg_cache cache miss reads, write-backs triggered on microcode_done_prev, PC increment uses microcode_done edge detection, instruction decode uses direct microcode_active signal
+- Identified: Verilator --timing causes registered signals from other modules to be unavailable in same clock edge; bus controller combinational logic depends on registered signals (reg_cache_read_valid, alu_result_valid, ktable_valid, value_conv_load_value_valid); pipeline registers added but tests still failing due to timing mismatch
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)

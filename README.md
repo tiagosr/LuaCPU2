@@ -14,16 +14,13 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
 - CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
-- Instruction operand timing - instr_a is stale during microcode execution because decode happens after microcode starts; OP_MOVE works but OP_LOADI/OP_LOADK fail
+- Verilator --timing registered signal alignment - bus controller combinational logic depends on registered signals from reg_cache, alu, value_conv, ktable; pipeline registers added but timing mismatch causes writes to wrong addresses
 
 ### 🔜 Next Steps
-- Fix instruction decode timing - ensure operands are decoded before microcode executes
+- Restructure bus controller to use microcode_done as trigger for write requests with proper register staging
 - Implement DDR1 memory interface, along with a simulation for the Verilator tests
 - Verify OP_ADD two-operand datapath (needs separate B and C operand reads)
 - Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
-
-### 📔 Backlog
-- Verilog lint/typecheck setup
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

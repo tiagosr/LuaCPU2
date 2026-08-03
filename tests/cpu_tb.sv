@@ -144,7 +144,77 @@ module cpu_tb;
             $display("TEST 2 FAILED");
         end
 
-        $display("=== Test Results: %0d/2 passed ===", test_passed);
+        // Test 3: OP_ADD two-operand
+        reset = 1;
+        repeat(10) @(posedge clk);
+        reset = 0;
+        @(posedge clk);
+        cycle_count = 0;
+
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200; // OP_LOADI A=2, sBx=512: R[2] = 512
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h22070102; // OP_ADD A=7, B=1, C=2: R[7] = R[1] + R[2] = 0 + 512 = 512
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48070000; // OP_RETURN1 A=7
+
+        $display("=== Test 3: OP_ADD two-operand ===");
+
+        repeat(300) begin
+            @(posedge clk);
+            cycle_count = cycle_count + 1;
+
+            if (cycle_count >= 8 && cycle_count <= 80) begin
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
+                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+            end
+
+            if (halt_flag || error_flag) break;
+        end
+
+        $display("Stack[7]: %0h (expected 00000200 - OP_ADD 0 + 512 = 512)", mem_inst.memory[7]);
+
+        if (mem_inst.memory[7] == 32'h00000200) begin
+            $display("TEST 3 PASSED");
+            test_passed = test_passed + 1;
+        end else begin
+            $display("TEST 3 FAILED");
+        end
+
+        // Test 4: OP_ADDK k-table operand
+        reset = 1;
+        repeat(10) @(posedge clk);
+        reset = 0;
+        @(posedge clk);
+        cycle_count = 0;
+
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h03020300; // OP_LOADK A=2, Bx=0: R[2] = K[0] = 100
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h16080100; // OP_ADDK A=8, B=1, C=0: R[8] = R[1] + K[0] = 0 + 100 = 100
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48080000; // OP_RETURN1 A=8
+
+        $display("=== Test 4: OP_ADDK k-table operand ===");
+
+        repeat(300) begin
+            @(posedge clk);
+            cycle_count = cycle_count + 1;
+
+            if (cycle_count >= 8 && cycle_count <= 100) begin
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
+                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+            end
+
+            if (halt_flag || error_flag) break;
+        end
+
+        $display("Stack[8]: %0h (expected 00000064 - OP_ADDK 0 + 100 = 100)", mem_inst.memory[8]);
+
+        if (mem_inst.memory[8] == 32'h00000064) begin
+            $display("TEST 4 PASSED");
+            test_passed = test_passed + 1;
+        end else begin
+            $display("TEST 4 FAILED");
+        end
+
+        $display("=== Test Results: %0d/4 passed ===", test_passed);
         $finish;
     end
 

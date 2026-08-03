@@ -14,20 +14,6 @@ module microcode_rom #(
         4'h0,   // reg_c_read = unused
         3'h0,   // mem_op = no access
         3'h0,   // pc_op = no change
-        2'h0,   // micro_branch = continue
-        2'h0,   // gc_step = no GC
-        2'h0,   // stack_op = no change
-        1'h1,   // enable = 1
-        34'h0   // immediate = 0
-    };
-
-    localparam [63:0] OP_MOVE_DONE = {
-        5'h0,   // alu_op = pass
-        4'h0,   // reg_a_write = window index A
-        4'h0,   // reg_b_read = unused
-        4'h0,   // reg_c_read = unused
-        3'h0,   // mem_op = no access
-        3'h0,   // pc_op = no change
         2'h1,   // micro_branch = terminate
         2'h0,   // gc_step = no GC
         2'h0,   // stack_op = no change
@@ -68,7 +54,7 @@ module microcode_rom #(
         4'h0,   // reg_a_write = window index A
         4'h0,   // reg_b_read = unused
         4'h0,   // reg_c_read = unused
-        3'h0,   // mem_op = no access
+        3'h1,   // mem_op = read ktable (used for write-back)
         3'h0,   // pc_op = no change
         2'h1,   // micro_branch = terminate
         2'h0,   // gc_step = no GC
@@ -1071,6 +1057,216 @@ module microcode_rom #(
         34'h0   // immediate = 0
     };
 
+    localparam [63:0] OP_ADD_STEP = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_ADD_DONE = {
+        5'h1,   // alu_op = add
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_SUB_STEP = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_SUB_DONE = {
+        5'h2,   // alu_op = sub
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MUL_STEP = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MUL_DONE = {
+        5'h3,   // alu_op = mul
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h2,   // reg_c_read = window index C
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_ADDK_STEP1 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h3,   // reg_c_read = ktable index
+        3'h1,   // mem_op = read ktable
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_ADDK_STEP2 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_ADDK_STEP3 = {
+        5'h1,   // alu_op = add
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_SUBK_STEP1 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h3,   // reg_c_read = ktable index
+        3'h1,   // mem_op = read ktable
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_SUBK_STEP2 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_SUBK_STEP3 = {
+        5'h2,   // alu_op = sub
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MULK_STEP1 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h0,   // reg_b_read = unused
+        4'h3,   // reg_c_read = ktable index
+        3'h1,   // mem_op = read ktable
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MULK_STEP2 = {
+        5'h0,   // alu_op = pass
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h0,   // micro_branch = continue
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
+    localparam [63:0] OP_MULK_STEP3 = {
+        5'h3,   // alu_op = mul
+        4'h0,   // reg_a_write = window index A
+        4'h1,   // reg_b_read = window index B
+        4'h3,   // reg_c_read = ktable index
+        3'h0,   // mem_op = no access
+        3'h0,   // pc_op = no change
+        2'h1,   // micro_branch = terminate
+        2'h0,   // gc_step = no GC
+        2'h0,   // stack_op = no change
+        1'h1,   // enable = 1
+        34'h0   // immediate = 0
+    };
+
     localparam [63:0] OP_MODK = {
         5'h14,  // alu_op = mod
         4'h0,   // reg_a_write = window index A
@@ -1659,7 +1855,7 @@ module microcode_rom #(
         34'h0   // immediate = 0
     };
 
-    localparam DONE_OFFSET = 512;
+    localparam DONE_OFFSET = 256;
 
     reg [ROM_WIDTH-1:0] rom_array [0:ROM_DEPTH-1];
 
@@ -1669,7 +1865,6 @@ module microcode_rom #(
         end
 
         rom_array[0]  = OP_MOVE;
-        rom_array[0 + DONE_OFFSET] = OP_MOVE_DONE;
         rom_array[1]  = OP_LOADI;
         rom_array[2]  = OP_LOADF;
         rom_array[3]  = OP_LOADK;
@@ -1707,12 +1902,15 @@ module microcode_rom #(
         rom_array[20] = OP_SELF;
         rom_array[20 + DONE_OFFSET] = OP_SELF_DONE;
         rom_array[21] = OP_ADDI;
-        rom_array[22] = OP_ADDK;
-        rom_array[22 + DONE_OFFSET] = OP_ADDK_DONE;
-        rom_array[23] = OP_SUBK;
-        rom_array[23 + DONE_OFFSET] = OP_SUBK_DONE;
-        rom_array[24] = OP_MULK;
-        rom_array[24 + DONE_OFFSET] = OP_MULK_DONE;
+        rom_array[22] = OP_ADDK_STEP1;
+        rom_array[22 + DONE_OFFSET] = OP_ADDK_STEP2;
+        rom_array[22 + 2 * DONE_OFFSET] = OP_ADDK_STEP3;
+        rom_array[23] = OP_SUBK_STEP1;
+        rom_array[23 + DONE_OFFSET] = OP_SUBK_STEP2;
+        rom_array[23 + 2 * DONE_OFFSET] = OP_SUBK_STEP3;
+        rom_array[24] = OP_MULK_STEP1;
+        rom_array[24 + DONE_OFFSET] = OP_MULK_STEP2;
+        rom_array[24 + 2 * DONE_OFFSET] = OP_MULK_STEP3;
         rom_array[25] = OP_MODK;
         rom_array[25 + DONE_OFFSET] = OP_MODK_DONE;
         rom_array[26] = OP_POWK;
@@ -1729,9 +1927,12 @@ module microcode_rom #(
         rom_array[31 + DONE_OFFSET] = OP_BXORK_DONE;
         rom_array[32] = OP_SHRI;
         rom_array[33] = OP_SHLI;
-        rom_array[34] = OP_ADD;
-        rom_array[35] = OP_SUB;
-        rom_array[36] = OP_MUL;
+        rom_array[34] = OP_ADD_STEP;
+        rom_array[34 + DONE_OFFSET] = OP_ADD_DONE;
+        rom_array[35] = OP_SUB_STEP;
+        rom_array[35 + DONE_OFFSET] = OP_SUB_DONE;
+        rom_array[36] = OP_MUL_STEP;
+        rom_array[36 + DONE_OFFSET] = OP_MUL_DONE;
         rom_array[37] = OP_MOD;
         rom_array[38] = OP_POW;
         rom_array[39] = OP_DIV;
