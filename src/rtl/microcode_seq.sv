@@ -64,6 +64,7 @@ module microcode_seq #(
         case (opcode_key)
             7'h01: immediate_source = {17'h00000, instr_bx};
             7'h02: immediate_source = {17'h00000, instr_bx};
+            7'h03: immediate_source = {17'h00000, instr_bx};
             7'h04: immediate_source = {9'h0, instr_ax};
             7'h15: immediate_source = {26'h0000000000, instr_c};
             7'h21: immediate_source = {26'h0000000000, instr_c};

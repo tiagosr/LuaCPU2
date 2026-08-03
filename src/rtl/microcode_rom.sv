@@ -78,7 +78,7 @@ module microcode_rom #(
     };
 
     localparam [63:0] OP_LOADTRUE = {
-        5'h0,   // alu_op = pass
+        5'h2,   // alu_op = load true
         4'h0,   // reg_a_write = window index A
         4'h0,   // reg_b_read = unused
         4'h0,   // reg_c_read = unused
@@ -92,7 +92,7 @@ module microcode_rom #(
     };
 
     localparam [63:0] OP_LOADFALSE = {
-        5'h0,   // alu_op = pass
+        5'h3,   // alu_op = load false
         4'h0,   // reg_a_write = window index A
         4'h0,   // reg_b_read = unused
         4'h0,   // reg_c_read = unused

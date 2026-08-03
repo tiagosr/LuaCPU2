@@ -20,6 +20,7 @@ module cpu_tb;
     wire [7:0] error_code;
 
     integer cycle_count;
+    integer test_passed;
 
     cpu cpu_inst (
         .clk(clk),
@@ -58,29 +59,30 @@ module cpu_tb;
 
     initial begin
         cycle_count = 0;
+        test_passed = 0;
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
         @(posedge clk);
 
         // Preload instruction ROM
-        // OP_MOVE A=1, B=0: R[1] = R[0]
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h01_00_00_00;
-        // OP_LOADI A=2, sBx=512
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h02_01_00_00;
-        // OP_RETURN1 A=3: halt
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h03_02_00_48;
+        // OP_MOVE A=1, B=0: R[1] = R[0] (key=0, A=1)
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h01000000;
+        // OP_LOADI A=2, sBx=512: R[2] = 512 (key=1, A=2, k=0, Bx=512)
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h02010200;
+        // OP_RETURN1 A=3: halt (key=0x48, A=3)
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h03480000;
 
-        // Preload k-table
-        mem_inst.memory[PARAM_STACK] = 32'h00000064;
+        // Preload k-table at address PARAM_STACK (256)
+        mem_inst.memory[PARAM_STACK] = 32'h00000064; // K[0] = 100
 
-        $display("=== Simple Test: OP_MOVE + OP_LOADI ===");
+        $display("=== Test 1: OP_MOVE + OP_LOADI + OP_RETURN1 ===");
 
-        repeat(200) begin
+        repeat(300) begin
             @(posedge clk);
             cycle_count = cycle_count + 1;
 
-            if (cycle_count >= 12 && cycle_count <= 25) begin
+            if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
             end
@@ -88,15 +90,60 @@ module cpu_tb;
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[1]: %0h (expected 00000000)", mem_inst.memory[1]);
-        $display("Stack[2]: %0h (expected 00000200)", mem_inst.memory[2]);
+        $display("Stack[1]: %0h (expected 00000000 - OP_MOVE R[0]=0 to R[1])", mem_inst.memory[1]);
+        $display("Stack[2]: %0h (expected fff00200 - OP_LOADI 512 = 0x200 boxed as integer)", mem_inst.memory[2]);
 
-        if (mem_inst.memory[1] == 32'h00000000 && mem_inst.memory[2] == 32'h00000200) begin
-            $display("TEST PASSED");
+        if (mem_inst.memory[1] == 32'h00000000 &&
+            mem_inst.memory[2] == 32'hfff00200) begin
+            $display("TEST 1 PASSED");
+            test_passed = test_passed + 1;
         end else begin
-            $display("TEST FAILED");
+            $display("TEST 1 FAILED");
         end
 
+        // Test 2: OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL
+        reset = 1;
+        repeat(10) @(posedge clk);
+        reset = 0;
+        @(posedge clk);
+        cycle_count = 0;
+
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000300; // OP_LOADK A=3, Bx=0 → R[3] = K[0]
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h04070000; // OP_LOADTRUE A=4 → R[4] = true
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h05050000; // OP_LOADFALSE A=5 → R[5] = false
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h06080000; // OP_LOADNIL A=6, B=0 → R[6] = nil
+        cpu_inst.instr_rom_inst.rom_array[4] = 32'h00000038; // OP_JMP Ax=0 (loop, won't halt naturally)
+
+        $display("=== Test 2: OP_LOADK + OP_LOADTRUE + OP_LOADFALSE + OP_LOADNIL ===");
+
+        repeat(300) begin
+            @(posedge clk);
+            cycle_count = cycle_count + 1;
+
+            if (cycle_count >= 8 && cycle_count <= 50) begin
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
+                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+            end
+
+            if (halt_flag || error_flag) break;
+        end
+
+        $display("Stack[3]: %0h (expected fff00064 - OP_LOADK K[0]=100 boxed as integer)", mem_inst.memory[3]);
+        $display("Stack[4]: %0h (expected fff70001 - OP_LOADTRUE)", mem_inst.memory[4]);
+        $display("Stack[5]: %0h (expected fff60000 - OP_LOADFALSE)", mem_inst.memory[5]);
+        $display("Stack[6]: %0h (expected fff50000 - OP_LOADNIL)", mem_inst.memory[6]);
+
+        if (mem_inst.memory[3] == 32'hfff00064 &&
+            mem_inst.memory[4] == 32'hfff70001 &&
+            mem_inst.memory[5] == 32'hfff60000 &&
+            mem_inst.memory[6] == 32'hfff50000) begin
+            $display("TEST 2 PASSED");
+            test_passed = test_passed + 1;
+        end else begin
+            $display("TEST 2 FAILED");
+        end
+
+        $display("=== Test Results: %0d/2 passed ===", test_passed);
         $finish;
     end
 

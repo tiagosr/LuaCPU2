@@ -1,5 +1,6 @@
 ### 🧪 Test Results
-- 3 passing tests (reset behavior verification, integrated CPU simulation, OP_MOVE/OP_LOADI/OP_LOADK execution with 1 passing register write)
+- 2 tests (OP_MOVE/OP_LOADI/OP_RETURN1 and OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL) - register write path timing issue remains: bus controller evaluation order causes writes to use stale instr_a value; PC advances but bus_addr computation uses pre-update register values
+- Identified: non-blocking assignment timing issue in bus controller - result_commit and bus_addr computed on same clock edge causes bus_addr to use old offset value
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)
@@ -16,3 +17,16 @@
 - Value converter module at [src/rtl/value_conv.sv](src/rtl/value_conv.sv) for NaN-boxing immediate values and k-table data
 - OP_MOVE, OP_LOADI, OP_LOADK microcode sequences with two-step execution (read then write)
 - Testbench with bytecode preload and register value verification
+- Value converter module extended with LOADTRUE (alu_op=5'h2), LOADFALSE (alu_op=5'h3), LOADNIL (alu_op=5'h4) operations
+- Microcode ROM: OP_LOADKX fixed with reg_c_read=4'h3 (ktable index), OP_LOADNIL multi-step sequence added
+- Microcode sequencer: added OP_ADDI, OP_LOADKX immediate sources, instr_ax interface for EXTRAARG decoding
+- CPU: unified bus controller and result commit logic, expanded reg_cache read condition for OP_MOVE
+- CPU: instruction decode fixed for instr_bx ({ir[23], ir[15:0]} instead of ir[23:7])
+- Test mem_model: 2-cycle handshake with data read on cycle after request
+- CPU: PC increment logic fixed - instruction decode and PC increment separated to prevent reading stale instruction at old PC address
+- CPU: bus controller refactored to handle ktable reads and stack writes directly (removed reg_cache write_bus_req path)
+- CPU: instruction decode fixed to clear instr_decoded flag allowing proper re-decode after micro sequence termination
+- Microcode ROM: OP_LOADTRUE alu_op fixed from 5'h0 to 5'h2, OP_LOADFALSE alu_op fixed from 5'h0 to 5'h3
+- Microcode sequencer: added immediate_source for OP_LOADK (7'h03) using instr_bx
+- Testbench: corrected bytecode encoding for OP_MOVE, OP_LOADI, OP_RETURN1, OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL, OP_JMP
+- reg_cache: converted blocking assignments to non-blocking assignments for Verilator compatibility

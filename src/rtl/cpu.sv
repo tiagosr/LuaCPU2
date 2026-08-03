@@ -1,4 +1,5 @@
 /* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 module cpu #(
     parameter PARAM_STACK   = 256,
     parameter PARAM_KTABLE  = 256,
@@ -25,8 +26,9 @@ module cpu #(
     output reg [7:0] error_code
 );
 
-    // PC register
+    // PC register and next-PC for fetch separation
     reg [31:0] pc;
+    reg [31:0] pc_next;
 
     // Instruction register
     reg [31:0] ir;
@@ -44,12 +46,6 @@ module cpu #(
     reg bus_state_idle;
     reg bus_state_req;
     reg bus_state_wait;
-
-    // Bus request source
-    reg bus_req_reg_cache;
-    reg bus_req_ktable;
-    reg bus_req_direct;
-    reg bus_req_direct_pending;
 
     // GC state
     reg gc_state_idle;
@@ -72,9 +68,6 @@ module cpu #(
     wire reg_cache_read_valid;
     wire reg_cache_cache_miss;
     wire reg_cache_stall;
-    wire reg_cache_write_bus_req;
-    wire [31:0] reg_cache_write_bus_addr;
-    wire [63:0] reg_cache_write_bus_data;
 
     // Microcode ROM interface
     wire [63:0] microcode_rom_data;
@@ -125,30 +118,14 @@ module cpu #(
     reg [7:0] result_commit_offset;
 
     // Instruction decode
-    always @(posedge clk) begin
-        if (reset) begin
-            instr_a <= 0;
-            instr_b <= 0;
-            instr_c <= 0;
-            instr_bx <= 0;
-            instr_k <= 0;
-            opcode_key <= 0;
-            instr_ax <= 0;
-        end else if (!reg_cache_stall && !microcode_micro_active && !ktable_read_waiting) begin
-            ir <= instr_rom_data;
-            instr_a <= ir[31:24];
-            instr_b <= ir[23:16];
-            instr_c <= ir[15:8];
-            instr_bx <= {ir[23], ir[15:0]};
-            instr_k <= ir[6];
-            opcode_key <= ir[22:16];
-        end else if (!reg_cache_stall && microcode_micro_active && !ktable_read_waiting && opcode_key == 7'h04) begin
-            instr_ax <= instr_rom_data[24:0];
-        end
-    end
+    reg instr_decoded;
 
-    // Microcode ROM address computation
-    assign microcode_rom_addr = microcode_micro_active ? microcode_branch_target : {3'h0, opcode_key[6:0]};
+    // Bus request source flags
+    reg bus_req_ktable;
+    reg bus_req_stack_read;
+    reg bus_req_stack_write;
+
+    localparam KTABLE_BASE = 256;
 
     // Register cache read offset selection
     wire [7:0] reg_cache_read_offset_wire;
@@ -156,6 +133,13 @@ module cpu #(
     assign reg_cache_read_offset_wire = (microcode_micro_active && microcode_enable) ?
         (microcode_reg_b_read == 4'h2 ? instr_a + 2 : instr_b) : instr_a;
     assign reg_cache_write_offset_wire = instr_a;
+
+    // Instantiate instruction ROM
+    instr_rom instr_rom_inst (
+        .clk(clk),
+        .address(pc),
+        .data(instr_rom_data)
+    );
 
     // Instantiate register cache
     reg_cache reg_cache_inst (
@@ -169,9 +153,6 @@ module cpu #(
         .read_data(reg_cache_read_data),
         .write_req(result_commit),
         .write_data(result_commit_data),
-        .write_bus_req(reg_cache_write_bus_req),
-        .write_bus_addr(reg_cache_write_bus_addr),
-        .write_bus_data(reg_cache_write_bus_data),
         .bus_resp_valid(bus_ack && bus_rdy),
         .bus_resp_data({bus_data_in, bus_data_in}),
         .cache_miss(reg_cache_cache_miss),
@@ -261,14 +242,8 @@ module cpu #(
         .clear_top(microcode_micro_done)
     );
 
-    // Instantiate instruction ROM
-    instr_rom instr_rom_inst (
-        .clk(clk),
-        .address(pc),
-        .data(instr_rom_data)
-    );
-
-    localparam KTABLE_BASE = 256;
+    // Microcode ROM address computation
+    assign microcode_rom_addr = microcode_micro_active ? microcode_branch_target : {3'h0, opcode_key[6:0]};
 
     // K-table read path
     always @(posedge clk) begin
@@ -290,7 +265,57 @@ module cpu #(
         end
     end
 
-    // Unified bus controller and result commit logic
+    // PC update
+    always @(posedge clk) begin
+        if (reset) begin
+            pc <= 0;
+            instr_decoded <= 0;
+        end else if (halt_flag || error_flag) begin
+            pc <= pc;
+            instr_decoded <= 0;
+        end else if (instr_decoded) begin
+            pc <= pc + 1;
+            instr_decoded <= 0;
+        end else if (microcode_micro_active && microcode_pc_op == 3'h1) begin
+            pc <= pc + 1;
+            instr_decoded <= 0;
+        end else if (microcode_micro_active && microcode_pc_op == 3'h2) begin
+            pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
+            instr_decoded <= 0;
+        end
+    end
+
+    // Instruction decode
+    always @(posedge clk) begin
+        if (reset) begin
+            ir <= 0;
+            instr_a <= 0;
+            instr_b <= 0;
+            instr_c <= 0;
+            instr_bx <= 0;
+            instr_k <= 0;
+            opcode_key <= 0;
+            instr_ax <= 0;
+            instr_decoded <= 0;
+        end else if (halt_flag || error_flag) begin
+            instr_decoded <= 0;
+        end else if (!reg_cache_stall && !microcode_micro_active && !ktable_read_waiting && !instr_decoded) begin
+            ir <= instr_rom_data;
+            instr_a <= ir[31:24];
+            instr_b <= ir[23:16];
+            instr_c <= ir[15:8];
+            instr_bx <= {ir[23], ir[15:0]};
+            instr_k <= ir[6];
+            opcode_key <= ir[22:16];
+            instr_decoded <= 1;
+        end else if (!reg_cache_stall && microcode_micro_active && !ktable_read_waiting && opcode_key == 7'h04) begin
+            instr_ax <= instr_rom_data[24:0];
+        end else begin
+            instr_decoded <= 0;
+        end
+    end
+
+    // Unified bus controller handling ktable reads and reg_cache writes
     always @(posedge clk) begin
         if (reset) begin
             bus_state_idle <= 1;
@@ -301,6 +326,8 @@ module cpu #(
             bus_req <= 0;
             bus_wr <= 0;
             bus_req_ktable <= 0;
+            bus_req_stack_read <= 0;
+            bus_req_stack_write <= 0;
             reg_cache_read_req <= 0;
             result_commit <= 0;
             result_commit_data <= 0;
@@ -310,16 +337,43 @@ module cpu #(
             bus_state_req <= 0;
             bus_state_wait <= 0;
             bus_req <= 0;
+            bus_req_ktable <= 0;
+            bus_req_stack_read <= 0;
+            bus_req_stack_write <= 0;
             reg_cache_read_req <= 0;
             result_commit <= 0;
         end else begin
             reg_cache_read_req <= 0;
             result_commit <= 0;
+            bus_req_ktable <= 0;
+            bus_req_stack_read <= 0;
+            bus_req_stack_write <= 0;
 
             // Register cache read request
             if (microcode_micro_active && microcode_enable && !ktable_read_waiting && microcode_reg_a_write == 4'h0 && microcode_reg_b_read != 4'h0) begin
                 reg_cache_read_req <= 1;
                 reg_cache_read_offset <= reg_cache_read_offset_wire;
+            end
+
+            // Result commit assertion (triggers reg_cache write)
+            if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
+                if (microcode_mem_op == 3'h1 && ktable_read_valid) begin
+                    result_commit <= 1;
+                    result_commit_data <= {ktable_read_data, ktable_read_data};
+                    result_commit_offset <= instr_a;
+                end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
+                    result_commit <= 1;
+                    result_commit_data <= alu_result;
+                    result_commit_offset <= instr_a;
+                end else if (reg_cache_read_valid) begin
+                    result_commit <= 1;
+                    result_commit_data <= reg_cache_read_data;
+                    result_commit_offset <= instr_a;
+                end else if (value_conv_load_value_valid) begin
+                    result_commit <= 1;
+                    result_commit_data <= value_conv_load_value;
+                    result_commit_offset <= instr_a;
+                end
             end
 
             // Bus state machine
@@ -331,49 +385,21 @@ module cpu #(
                     bus_state_idle <= 0;
                     bus_state_req <= 1;
                     bus_req_ktable <= 1;
-                end else if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
-                    // Direct commit write
-                    if (microcode_mem_op == 3'h1 && ktable_read_valid) begin
-                        bus_addr <= instr_a + stack_ptr_wb;
-                        bus_data_out <= {ktable_read_data, ktable_read_data}[31:0];
-                        bus_wr <= 1;
-                        bus_req <= 1;
-                        bus_state_idle <= 0;
-                        bus_state_req <= 1;
-                        result_commit_offset <= instr_a;
-                        result_commit_data <= {ktable_read_data, ktable_read_data};
-                        result_commit <= 1;
-                    end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
-                        bus_addr <= instr_a + stack_ptr_wb;
-                        bus_data_out <= alu_result[31:0];
-                        bus_wr <= 1;
-                        bus_req <= 1;
-                        bus_state_idle <= 0;
-                        bus_state_req <= 1;
-                        result_commit_offset <= instr_a;
-                        result_commit_data <= alu_result;
-                        result_commit <= 1;
-                    end else if (reg_cache_read_valid) begin
-                        bus_addr <= instr_a + stack_ptr_wb;
-                        bus_data_out <= reg_cache_read_data[31:0];
-                        bus_wr <= 1;
-                        bus_req <= 1;
-                        bus_state_idle <= 0;
-                        bus_state_req <= 1;
-                        result_commit_offset <= instr_a;
-                        result_commit_data <= reg_cache_read_data;
-                        result_commit <= 1;
-                    end else if (value_conv_load_value_valid) begin
-                        bus_addr <= instr_a + stack_ptr_wb;
-                        bus_data_out <= value_conv_load_value[31:0];
-                        bus_wr <= 1;
-                        bus_req <= 1;
-                        bus_state_idle <= 0;
-                        bus_state_req <= 1;
-                        result_commit_offset <= instr_a;
-                        result_commit_data <= value_conv_load_value;
-                        result_commit <= 1;
-                    end
+                end else if (reg_cache_stall && reg_cache_cache_miss) begin
+                    bus_addr <= reg_cache_read_offset + stack_ptr_wb;
+                    bus_wr <= 0;
+                    bus_req <= 1;
+                    bus_state_idle <= 0;
+                    bus_state_req <= 1;
+                    bus_req_stack_read <= 1;
+                end else if (result_commit && !bus_req_ktable && !bus_req_stack_read) begin
+                    bus_addr <= instr_a + stack_ptr_wb;
+                    bus_data_out <= result_commit_data[31:0];
+                    bus_wr <= 1;
+                    bus_req <= 1;
+                    bus_state_idle <= 0;
+                    bus_state_req <= 1;
+                    bus_req_stack_write <= 1;
                 end
             end else if (bus_state_req) begin
                 if (bus_rdy) begin
@@ -386,23 +412,10 @@ module cpu #(
                     bus_req <= 0;
                     bus_state_idle <= 1;
                     bus_req_ktable <= 0;
+                    bus_req_stack_read <= 0;
+                    bus_req_stack_write <= 0;
                 end
             end
-        end
-    end
-
-    // PC update
-    always @(posedge clk) begin
-        if (reset) begin
-            pc <= 0;
-        end else if (halt_flag || error_flag) begin
-            pc <= pc;
-        end else if (microcode_micro_active && microcode_pc_op == 3'h1) begin
-            pc <= pc + 1;
-        end else if (microcode_micro_active && microcode_pc_op == 3'h2) begin
-            pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
-        end else if (microcode_micro_done && !microcode_micro_active) begin
-            pc <= pc + 1;
         end
     end
 
@@ -432,5 +445,6 @@ module cpu #(
         end
     end
 
+/* verilator lint_on WIDTHTRUNC */
 /* verilator lint_on WIDTHEXPAND */
 endmodule
