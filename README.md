@@ -18,6 +18,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔜 Next Steps
 - Fix bus controller non-blocking assignment timing - bus_addr and result_commit computed on same clock edge causes stale offset
+- Implement DDR1 memory interface, along with a simulation for the Verilator tests
 - Verify OP_ADD two-operand datapath (needs separate B and C operand reads)
 - Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
 - Fix reg_cache read path - cache miss bus read handling needs verification

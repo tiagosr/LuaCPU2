@@ -25,7 +25,11 @@ module reg_cache #(
     input  wire invalidate,
 
     output reg [4:0] hit_count,
-    output reg [4:0] miss_count
+    output reg [4:0] miss_count,
+
+    output reg bus_addr_req,
+    output reg [7:0] bus_addr_offset,
+    output reg bus_addr_use_wb
 );
 
     reg [63:0] cache_data [0:CACHE_SIZE - 1];
@@ -76,6 +80,7 @@ module reg_cache #(
 
             read_valid <= 0;
             cache_miss <= 0;
+            bus_addr_req <= 0;
 
             if (invalidate) begin
                 for (int i = 0; i < CACHE_SIZE; i = i + 1) begin
@@ -98,6 +103,7 @@ module reg_cache #(
                         read_data <= bus_resp_data;
                         waiting_for_bus <= 0;
                         stall <= 0;
+                        bus_addr_req <= 0;
                         miss_count <= miss_count + 1;
                     end
                 end else if (write_req) begin
@@ -153,6 +159,9 @@ module reg_cache #(
                         cache_miss <= 1;
                         stall <= 1;
                         waiting_for_bus <= 1;
+                        bus_addr_req <= 1;
+                        bus_addr_offset <= operand_offset;
+                        bus_addr_use_wb <= 1;
                         low_lru_found <= 0;
                         for (int i = 0; i < CACHE_SIZE; i = i + 1) begin
                             if (!low_lru_found || cache_lru[i] < cache_lru[evict_idx]) begin

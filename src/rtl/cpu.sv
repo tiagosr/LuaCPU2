@@ -60,7 +60,7 @@ module cpu #(
     reg ktable_read_valid;
     reg ktable_read_waiting;
 
-    // Microcode ROM address
+    // Microcode ROM address (from sequencer)
     wire [9:0] microcode_rom_addr;
 
     // Register cache interface
@@ -68,6 +68,9 @@ module cpu #(
     wire reg_cache_read_valid;
     wire reg_cache_cache_miss;
     wire reg_cache_stall;
+    wire reg_cache_bus_addr_req;
+    wire [7:0] reg_cache_bus_addr_offset;
+    wire reg_cache_bus_addr_use_wb;
 
     // Microcode ROM interface
     wire [63:0] microcode_rom_data;
@@ -87,6 +90,8 @@ module cpu #(
     wire microcode_micro_active;
     wire microcode_micro_done;
     wire [9:0] microcode_branch_target;
+    wire [9:0] microcode_sequencer_addr;
+    reg micro_stall;
 
     // Stack pointer interface
     wire [31:0] stack_ptr_wb;
@@ -108,14 +113,21 @@ module cpu #(
     wire [63:0] value_conv_load_value;
     wire value_conv_load_value_valid;
 
+    // Register cache B operand read
+    reg reg_cache_read_b_req;
+    reg [7:0] reg_cache_read_b_offset;
+    wire [63:0] reg_cache_read_data_b;
+    wire reg_cache_read_valid_b;
+
     // Register cache read request
     reg reg_cache_read_req;
     reg [7:0] reg_cache_read_offset;
 
-    // Result commit
+    // Result commit - computed on previous cycle, asserted this cycle
     reg result_commit;
     reg [63:0] result_commit_data;
     reg [7:0] result_commit_offset;
+    reg [7:0] result_commit_addr_offset;
 
     // Instruction decode
     reg instr_decoded;
@@ -159,7 +171,10 @@ module cpu #(
         .stall(reg_cache_stall),
         .invalidate(microcode_micro_done && microcode_stack_op[1]),
         .hit_count(),
-        .miss_count()
+        .miss_count(),
+        .bus_addr_req(reg_cache_bus_addr_req),
+        .bus_addr_offset(reg_cache_bus_addr_offset),
+        .bus_addr_use_wb(reg_cache_bus_addr_use_wb)
     );
 
     // Instantiate ALU
@@ -222,7 +237,9 @@ module cpu #(
         .immediate(microcode_immediate),
         .micro_active(microcode_micro_active),
         .micro_done(microcode_micro_done),
-        .branch_target(microcode_branch_target)
+        .branch_target(microcode_branch_target),
+        .sequencer_addr_out(microcode_sequencer_addr),
+        .micro_stall_in(micro_stall)
     );
 
     // Instantiate stack pointer
@@ -242,8 +259,8 @@ module cpu #(
         .clear_top(microcode_micro_done)
     );
 
-    // Microcode ROM address computation
-    assign microcode_rom_addr = microcode_micro_active ? microcode_branch_target : {3'h0, opcode_key[6:0]};
+    // Microcode ROM address computation (use sequencer address directly)
+    assign microcode_rom_addr = microcode_sequencer_addr;
 
     // K-table read path
     always @(posedge clk) begin
@@ -315,6 +332,52 @@ module cpu #(
         end
     end
 
+    // Microcode stall control
+    always @(posedge clk) begin
+        if (reset) begin
+            micro_stall <= 0;
+        end else if (halt_flag || error_flag) begin
+            micro_stall <= 0;
+        end else begin
+            micro_stall <= reg_cache_stall || ktable_read_waiting;
+        end
+    end
+
+    // Result commit data computation (one cycle before bus write)
+    always @(posedge clk) begin
+        if (reset) begin
+            result_commit_data <= 0;
+            result_commit_offset <= 0;
+            result_commit_addr_offset <= 0;
+        end else if (halt_flag || error_flag) begin
+            result_commit_data <= 0;
+            result_commit_offset <= 0;
+            result_commit_addr_offset <= 0;
+        end else if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
+            if (microcode_mem_op == 3'h1 && ktable_read_valid) begin
+                result_commit_data <= {ktable_read_data, ktable_read_data};
+                result_commit_offset <= 1;
+                result_commit_addr_offset <= instr_a;
+            end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
+                result_commit_data <= alu_result;
+                result_commit_offset <= 1;
+                result_commit_addr_offset <= instr_a;
+            end else if (reg_cache_read_valid && microcode_reg_b_read != 4'h0) begin
+                result_commit_data <= reg_cache_read_data;
+                result_commit_offset <= 1;
+                result_commit_addr_offset <= instr_a;
+            end else if (value_conv_load_value_valid) begin
+                result_commit_data <= value_conv_load_value;
+                result_commit_offset <= 1;
+                result_commit_addr_offset <= instr_a;
+            end else begin
+                result_commit_offset <= 0;
+            end
+        end else begin
+            result_commit_offset <= 0;
+        end
+    end
+
     // Unified bus controller handling ktable reads and reg_cache writes
     always @(posedge clk) begin
         if (reset) begin
@@ -330,8 +393,6 @@ module cpu #(
             bus_req_stack_write <= 0;
             reg_cache_read_req <= 0;
             result_commit <= 0;
-            result_commit_data <= 0;
-            result_commit_offset <= 0;
         end else if (halt_flag || error_flag) begin
             bus_state_idle <= 1;
             bus_state_req <= 0;
@@ -350,30 +411,14 @@ module cpu #(
             bus_req_stack_write <= 0;
 
             // Register cache read request
-            if (microcode_micro_active && microcode_enable && !ktable_read_waiting && microcode_reg_a_write == 4'h0 && microcode_reg_b_read != 4'h0) begin
+            if (microcode_micro_active && microcode_enable && !ktable_read_waiting && microcode_reg_a_write == 4'h0 && microcode_reg_b_read != 4'h0 && !reg_cache_read_req) begin
                 reg_cache_read_req <= 1;
                 reg_cache_read_offset <= reg_cache_read_offset_wire;
             end
 
-            // Result commit assertion (triggers reg_cache write)
-            if (microcode_micro_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
-                if (microcode_mem_op == 3'h1 && ktable_read_valid) begin
-                    result_commit <= 1;
-                    result_commit_data <= {ktable_read_data, ktable_read_data};
-                    result_commit_offset <= instr_a;
-                end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
-                    result_commit <= 1;
-                    result_commit_data <= alu_result;
-                    result_commit_offset <= instr_a;
-                end else if (reg_cache_read_valid) begin
-                    result_commit <= 1;
-                    result_commit_data <= reg_cache_read_data;
-                    result_commit_offset <= instr_a;
-                end else if (value_conv_load_value_valid) begin
-                    result_commit <= 1;
-                    result_commit_data <= value_conv_load_value;
-                    result_commit_offset <= instr_a;
-                end
+            // Result commit assertion (only when no bus activity and data is ready)
+            if (result_commit_offset && !bus_req && reg_cache_read_valid) begin
+                result_commit <= 1;
             end
 
             // Bus state machine
@@ -385,15 +430,15 @@ module cpu #(
                     bus_state_idle <= 0;
                     bus_state_req <= 1;
                     bus_req_ktable <= 1;
-                end else if (reg_cache_stall && reg_cache_cache_miss) begin
-                    bus_addr <= reg_cache_read_offset + stack_ptr_wb;
+                end else if (reg_cache_bus_addr_req) begin
+                    bus_addr <= reg_cache_bus_addr_use_wb ? reg_cache_bus_addr_offset + stack_ptr_wb : reg_cache_bus_addr_offset;
                     bus_wr <= 0;
                     bus_req <= 1;
                     bus_state_idle <= 0;
                     bus_state_req <= 1;
                     bus_req_stack_read <= 1;
-                end else if (result_commit && !bus_req_ktable && !bus_req_stack_read) begin
-                    bus_addr <= instr_a + stack_ptr_wb;
+                end else if (result_commit) begin
+                    bus_addr <= result_commit_addr_offset + stack_ptr_wb;
                     bus_data_out <= result_commit_data[31:0];
                     bus_wr <= 1;
                     bus_req <= 1;

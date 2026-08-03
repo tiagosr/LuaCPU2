@@ -66,12 +66,12 @@ module cpu_tb;
         @(posedge clk);
 
         // Preload instruction ROM
-        // OP_MOVE A=1, B=0: R[1] = R[0] (key=0, A=1)
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h01000000;
-        // OP_LOADI A=2, sBx=512: R[2] = 512 (key=1, A=2, k=0, Bx=512)
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h02010200;
-        // OP_RETURN1 A=3: halt (key=0x48, A=3)
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h03480000;
+        // OP_MOVE A=1, B=0: R[1] = R[0] (key=0x00, A=1, B=0)
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000;
+        // OP_LOADI A=2, sBx=512: R[2] = 512 (key=0x01, A=2, k=0, Bx=512)
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200;
+        // OP_RETURN1 A=1: return R[1] (key=0x48=72, A=1)
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h48010000;
 
         // Preload k-table at address PARAM_STACK (256)
         mem_inst.memory[PARAM_STACK] = 32'h00000064; // K[0] = 100
@@ -83,8 +83,9 @@ module cpu_tb;
             cycle_count = cycle_count + 1;
 
             if (cycle_count >= 8 && cycle_count <= 50) begin
-                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
-                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b micro_active=%0b micro_done=%0b instr_a=%0h instr_decoded=%0b",
+                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag,
+                    cpu_inst.microcode_micro_active, cpu_inst.microcode_micro_done, cpu_inst.instr_a, cpu_inst.instr_decoded);
             end
 
             if (halt_flag || error_flag) break;
@@ -108,11 +109,11 @@ module cpu_tb;
         @(posedge clk);
         cycle_count = 0;
 
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000300; // OP_LOADK A=3, Bx=0 → R[3] = K[0]
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h04070000; // OP_LOADTRUE A=4 → R[4] = true
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h05050000; // OP_LOADFALSE A=5 → R[5] = false
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h06080000; // OP_LOADNIL A=6, B=0 → R[6] = nil
-        cpu_inst.instr_rom_inst.rom_array[4] = 32'h00000038; // OP_JMP Ax=0 (loop, won't halt naturally)
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000300; // OP_LOADK A=3, Bx=0 → R[3] = K[0] (key=3, A=3)
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h07040000; // OP_LOADTRUE A=4 → R[4] = true (key=7, A=4)
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h05050000; // OP_LOADFALSE A=5 → R[5] = false (key=5, A=5)
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h08060000; // OP_LOADNIL A=6 → R[6] = nil (key=8, A=6)
+        cpu_inst.instr_rom_inst.rom_array[4] = 32'h48000000; // OP_RETURN1 A=0 (key=72, halt)
 
         $display("=== Test 2: OP_LOADK + OP_LOADTRUE + OP_LOADFALSE + OP_LOADNIL ===");
 

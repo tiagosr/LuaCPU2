@@ -31,7 +31,9 @@ module microcode_seq #(
     output reg micro_active,
     output reg micro_done,
 
-    output reg [9:0] branch_target
+    output reg [9:0] branch_target,
+    output reg [9:0] sequencer_addr_out,
+    input wire micro_stall_in
 );
 
     wire [4:0] rom_alu_op;
@@ -153,34 +155,40 @@ module microcode_seq #(
                     next_micro_done = micro_done;
                     next_branch_target = 10'h0;
 
-                    case (rom_micro_branch)
-                        2'h0: begin
-                            next_internal_addr = rom_address + DONE_OFFSET;
-                            next_micro_active = micro_active;
-                            next_micro_done = micro_done;
-                        end
-                        2'h1: begin
-                            next_internal_addr = rom_address;
-                            next_micro_active = 1'b0;
-                            next_micro_done = 1'b1;
-                        end
-                        2'h2: begin
-                            next_internal_addr = rom_address + 1;
-                            next_micro_active = micro_active;
-                            next_micro_done = micro_done;
-                            next_branch_target = immediate_source[9:0];
-                        end
-                        2'h3: begin
-                            next_internal_addr = rom_address;
-                            next_micro_active = 1'b0;
-                            next_micro_done = 1'b1;
-                        end
-                        default: begin
-                            next_internal_addr = rom_address + 1;
-                            next_micro_active = micro_active;
-                            next_micro_done = micro_done;
-                        end
-                    endcase
+                    if (micro_stall_in) begin
+                        next_internal_addr = rom_address;
+                        next_micro_active = micro_active;
+                        next_micro_done = micro_done;
+                    end else begin
+                        case (rom_micro_branch)
+                            2'h0: begin
+                                next_internal_addr = rom_address + DONE_OFFSET;
+                                next_micro_active = micro_active;
+                                next_micro_done = micro_done;
+                            end
+                            2'h1: begin
+                                next_internal_addr = rom_address;
+                                next_micro_active = 1'b0;
+                                next_micro_done = 1'b1;
+                            end
+                            2'h2: begin
+                                next_internal_addr = rom_address + 1;
+                                next_micro_active = micro_active;
+                                next_micro_done = micro_done;
+                                next_branch_target = immediate_source[9:0];
+                            end
+                            2'h3: begin
+                                next_internal_addr = rom_address;
+                                next_micro_active = 1'b0;
+                                next_micro_done = 1'b1;
+                            end
+                            default: begin
+                                next_internal_addr = rom_address + 1;
+                                next_micro_active = micro_active;
+                                next_micro_done = micro_done;
+                            end
+                        endcase
+                    end
                 end
                 default: begin
                     next_internal_addr = 10'h0;
@@ -238,6 +246,7 @@ module microcode_seq #(
             micro_active <= next_micro_active;
             micro_done <= next_micro_done;
             branch_target <= next_branch_target;
+            sequencer_addr_out <= sequencer_addr;
         end
     end
 
