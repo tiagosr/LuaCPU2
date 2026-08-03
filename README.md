@@ -14,13 +14,13 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
 - CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
-- Verilator --timing registered signal alignment - PC/decode timing ordering issue (PC advances at microcode boundary before next instruction decoded); latched signals capture wrong values; bus writes to incorrect addresses
-- Microcode_done signal alignment - latching trigger fires at wrong edge for single-step vs multi-step instructions
+- Writeback pipeline timing - writeback_ready triggers when microcode sequence completes but data validity signals (alu_result_valid, reg_cache_read_valid) are registered 1 cycle behind; bus_data_out always 0
+- Verilator --timing mode edge detection fails (micro_done_edge, micro_active_falling) due to registered signal evaluation timing mismatch
 
 ### 🔜 Next Steps
-- Implement DDR1 memory interface, along with a simulation for the Verilator tests
-- Verify OP_ADD two-operand datapath (needs separate B and C operand reads)
-- Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
+- Redesign writeback pipeline to wait for data validity signals before triggering bus writeback
+- Fix bus_addr calculation (stack_ptr_wb offset incorrect)
+- Verify OP_ADD, OP_ADDK, OP_SUBK, OP_MULK execute correctly with proper writeback timing
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

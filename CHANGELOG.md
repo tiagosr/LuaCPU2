@@ -1,7 +1,7 @@
 ### 🧪 Test Results
-- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing; PC timing fixed (stays correct during microcode execution) but bus writes still to wrong addresses due to latched signal timing mismatch
-- Fixed: microcode_done now correctly 0 for non-terminate branches (continue/conditional), bus controller restructured with dedicated writeback state, pipeline registers added for microcode signal latching at sequence boundary, ktable data routed through b_operand_pipe for pass operations
-- Identified: PC advances at microcode boundary before next instruction is decoded; latched signals capture wrong values due to Verilator --timing registered signal alignment
+- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing; bus_data_out always 0 due to writeback triggering before ALU/result data validity signals are registered; PC increments rapidly without proper writeback completion
+- Fixed: reg_cache_read_c_req allows simultaneous B and C operand reads for OP_ADD; microcode sequencer uses multi-step sequences for OP_ADDK/OP_SUBK/OP_MULK; microcode ROM depth expanded to 2048; bus writeback timing fixed using writeback_ready signal instead of edge detection; PC update logic fixed to clear instr_decoded and increment PC when writeback_ready is true; testbench preloads instruction ROM and k-table BEFORE reset deassertion; alu_operand_b fixed to use reg_cache_read_c_data when microcode_reg_c_read active; reg_cache_stall_c added to micro_stall_in
+- Identified: Verilator --timing mode causes edge detection signals (micro_done_edge, micro_active_falling) to fail because registered signals evaluated at different cycle phases; writeback_ready set when microcode sequence completes but data validity signals (alu_result_valid, reg_cache_read_valid) are registered 1 cycle behind; requires architectural redesign of writeback pipeline timing
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)

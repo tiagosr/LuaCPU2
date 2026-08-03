@@ -1,9 +1,9 @@
 module microcode_rom #(
-    parameter ROM_DEPTH = 1024,
+    parameter ROM_DEPTH = 2048,
     parameter ROM_WIDTH = 64
 )(
     input  wire clk,
-    input  wire [9:0] address,
+    input  wire [10:0] address,
     output wire [ROM_WIDTH-1:0] data
 );
 

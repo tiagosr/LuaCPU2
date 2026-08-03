@@ -45,13 +45,13 @@ module cpu #(
     reg [63:0] b_operand_latch;
     reg [63:0] b_operand_pipe;
 
-    reg micro_active_prev;
+    reg writeback_ready;
 
     reg [31:0] ktable_data;
     reg ktable_valid;
     reg ktable_waiting;
 
-    wire [9:0] microcode_rom_addr;
+    wire [10:0] microcode_rom_addr;
 
     wire [63:0] reg_cache_read_data;
     wire reg_cache_read_valid;
@@ -76,8 +76,9 @@ module cpu #(
     wire [33:0] microcode_immediate;
     wire microcode_active;
     wire microcode_done;
+    wire microcode_writeback_ready;
     wire [9:0] microcode_branch_target;
-    wire [9:0] microcode_sequencer_addr;
+    wire [10:0] microcode_sequencer_addr;
 
     wire [31:0] stack_ptr_wb;
 
@@ -101,11 +102,11 @@ module cpu #(
     wire [7:0] reg_cache_read_c_offset;
 
     assign reg_cache_read_b_req = microcode_active && microcode_enable && microcode_reg_b_read != 4'h0 && microcode_reg_b_read != 4'h3;
-    assign reg_cache_read_c_req = microcode_active && microcode_enable && microcode_reg_c_read != 4'h0 && microcode_reg_c_read != 4'h3 && microcode_reg_b_read == 4'h0;
+    assign reg_cache_read_c_req = microcode_active && microcode_enable && microcode_reg_c_read != 4'h0 && microcode_reg_c_read != 4'h3;
     assign reg_cache_read_offset = reg_cache_read_b_req ? instr_b : instr_a;
     assign reg_cache_read_c_offset = reg_cache_read_c_req ? instr_c : instr_a;
 
-    assign alu_operand_b = (microcode_active && microcode_enable && microcode_reg_c_read == 4'h3) ? {ktable_data, ktable_data} : reg_cache_read_data;
+    assign alu_operand_b = (microcode_active && microcode_enable && microcode_reg_c_read == 4'h3) ? {ktable_data, ktable_data} : (microcode_reg_c_read != 4'h0 && microcode_reg_c_read != 4'h3) ? reg_cache_read_c_data : reg_cache_read_data;
 
     instr_rom instr_rom_inst (
         .clk(clk),
@@ -198,9 +199,10 @@ module cpu #(
         .immediate(microcode_immediate),
         .micro_active(microcode_active),
         .micro_done(microcode_done),
+        .micro_writeback_ready(microcode_writeback_ready),
         .branch_target(microcode_branch_target),
         .sequencer_addr_out(microcode_sequencer_addr),
-        .micro_stall_in(reg_cache_stall || ktable_waiting)
+        .micro_stall_in(reg_cache_stall || reg_cache_stall_c || ktable_waiting)
     );
 
     stack_ptr stack_ptr_inst (
@@ -243,11 +245,15 @@ module cpu #(
 
     always @(posedge clk) begin
         if (reset) begin
-            micro_active_prev <= 0;
+            writeback_ready <= 0;
         end else if (halt_flag || error_flag) begin
-            micro_active_prev <= 0;
+            writeback_ready <= 0;
         end else begin
-            micro_active_prev <= microcode_active;
+            if (microcode_writeback_ready && bus_idle && !bus_writeback && !bus_request && !bus_wait && !writeback_ready) begin
+                writeback_ready <= 1;
+            end else if (bus_writeback || bus_request || bus_wait) begin
+                writeback_ready <= 0;
+            end
         end
     end
 
@@ -292,7 +298,7 @@ module cpu #(
             latched_ktable_valid <= 0;
             latched_ktable_data <= 0;
             latched_value_conv_load_value <= 0;
-        end else if (microcode_done && !microcode_active && micro_active_prev) begin
+        end else if (writeback_ready) begin
             latched_alu_op <= microcode_alu_op;
             latched_reg_a_write <= microcode_reg_a_write;
             latched_reg_b_read <= microcode_reg_b_read;
@@ -328,7 +334,7 @@ module cpu #(
         end else if (microcode_active && microcode_pc_op == 3'h2) begin
             pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
             instr_decoded <= 0;
-        end else if (microcode_done && !microcode_active && micro_active_prev && instr_decoded == 1 && !reg_cache_stall && !ktable_waiting) begin
+        end else if (writeback_ready && !reg_cache_stall && !ktable_waiting) begin
             instr_decoded <= 0;
             pc <= pc + 1;
         end
@@ -429,7 +435,7 @@ module cpu #(
                     bus_req <= 1;
                     bus_idle <= 0;
                     bus_request <= 1;
-                end else if (microcode_done && !microcode_active && micro_active_prev && latched_enable && !reg_cache_stall && !ktable_waiting) begin
+                end else if (writeback_ready && latched_enable && !reg_cache_stall && !ktable_waiting) begin
                     if (latched_alu_op != 5'h0 && latched_alu_result_valid) begin
                         bus_addr <= latched_instr_a + stack_ptr_wb;
                         bus_data_out <= alu_result[31:0];

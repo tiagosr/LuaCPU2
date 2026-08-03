@@ -60,12 +60,8 @@ module cpu_tb;
     initial begin
         cycle_count = 0;
         test_passed = 0;
-        reset = 1;
-        repeat(10) @(posedge clk);
-        reset = 0;
-        @(posedge clk);
 
-        // Preload instruction ROM
+        // Preload instruction ROM before reset
         // OP_MOVE A=1, B=0: R[1] = R[0] (key=0x00, A=1, B=0)
         cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000;
         // OP_LOADI A=2, sBx=512: R[2] = 512 (key=0x01, A=2, k=0, Bx=512)
@@ -76,6 +72,11 @@ module cpu_tb;
         // Preload k-table at address PARAM_STACK (256)
         mem_inst.memory[PARAM_STACK] = 32'h00000064; // K[0] = 100
 
+        reset = 1;
+        repeat(10) @(posedge clk);
+        reset = 0;
+        @(posedge clk);
+
         $display("=== Test 1: OP_MOVE + OP_LOADI + OP_RETURN1 ===");
 
         repeat(300) begin
@@ -83,9 +84,8 @@ module cpu_tb;
             cycle_count = cycle_count + 1;
 
             if (cycle_count >= 8 && cycle_count <= 50) begin
-                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b micro_active=%0b micro_done=%0b instr_a=%0h",
-                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag,
-                    cpu_inst.microcode_active, cpu_inst.microcode_done, cpu_inst.instr_a);
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
+                    cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
             end
 
             if (halt_flag || error_flag) break;
@@ -103,17 +103,16 @@ module cpu_tb;
         end
 
         // Test 2: OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL
-        reset = 1;
-        repeat(10) @(posedge clk);
-        reset = 0;
-        @(posedge clk);
-        cycle_count = 0;
-
         cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000300; // OP_LOADK A=3, Bx=0 → R[3] = K[0] (key=3, A=3)
         cpu_inst.instr_rom_inst.rom_array[1] = 32'h07040000; // OP_LOADTRUE A=4 → R[4] = true (key=7, A=4)
         cpu_inst.instr_rom_inst.rom_array[2] = 32'h05050000; // OP_LOADFALSE A=5 → R[5] = false (key=5, A=5)
         cpu_inst.instr_rom_inst.rom_array[3] = 32'h08060000; // OP_LOADNIL A=6 → R[6] = nil (key=8, A=6)
         cpu_inst.instr_rom_inst.rom_array[4] = 32'h48000000; // OP_RETURN1 A=0 (key=72, halt)
+        reset = 1;
+        repeat(10) @(posedge clk);
+        reset = 0;
+        @(posedge clk);
+        cycle_count = 0;
 
         $display("=== Test 2: OP_LOADK + OP_LOADTRUE + OP_LOADFALSE + OP_LOADNIL ===");
 
@@ -145,16 +144,15 @@ module cpu_tb;
         end
 
         // Test 3: OP_ADD two-operand
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200; // OP_LOADI A=2, sBx=512: R[2] = 512
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h22070102; // OP_ADD A=7, B=1, C=2: R[7] = R[1] + R[2] = 0 + 512 = 512
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48070000; // OP_RETURN1 A=7
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
         @(posedge clk);
         cycle_count = 0;
-
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200; // OP_LOADI A=2, sBx=512: R[2] = 512
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h22070102; // OP_ADD A=7, B=1, C=2: R[7] = R[1] + R[2] = 0 + 512 = 512
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48070000; // OP_RETURN1 A=7
 
         $display("=== Test 3: OP_ADD two-operand ===");
 
@@ -180,16 +178,15 @@ module cpu_tb;
         end
 
         // Test 4: OP_ADDK k-table operand
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h03020300; // OP_LOADK A=2, Bx=0: R[2] = K[0] = 100
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h16080100; // OP_ADDK A=8, B=1, C=0: R[8] = R[1] + K[0] = 0 + 100 = 100
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48080000; // OP_RETURN1 A=8
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
         @(posedge clk);
         cycle_count = 0;
-
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h03020300; // OP_LOADK A=2, Bx=0: R[2] = K[0] = 100
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h16080100; // OP_ADDK A=8, B=1, C=0: R[8] = R[1] + K[0] = 0 + 100 = 100
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48080000; // OP_RETURN1 A=8
 
         $display("=== Test 4: OP_ADDK k-table operand ===");
 
