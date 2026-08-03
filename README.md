@@ -14,14 +14,16 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
 - CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
-- Register write path timing synchronization - bus controller and commit logic evaluation order issue causes writes to use stale data; PC advances but bus_addr computation uses pre-update register values
+- Instruction operand timing - instr_a is stale during microcode execution because decode happens after microcode starts; OP_MOVE works but OP_LOADI/OP_LOADK fail
 
 ### 🔜 Next Steps
-- Fix bus controller non-blocking assignment timing - bus_addr and result_commit computed on same clock edge causes stale offset
+- Fix instruction decode timing - ensure operands are decoded before microcode executes
 - Implement DDR1 memory interface, along with a simulation for the Verilator tests
 - Verify OP_ADD two-operand datapath (needs separate B and C operand reads)
 - Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
-- Fix reg_cache read path - cache miss bus read handling needs verification
+
+### 📔 Backlog
+- Verilog lint/typecheck setup
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

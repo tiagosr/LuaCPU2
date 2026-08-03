@@ -1,6 +1,7 @@
 ### 🧪 Test Results
-- 2 tests (OP_MOVE/OP_LOADI/OP_RETURN1 and OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL) - register write path timing issue remains: bus controller evaluation order causes writes to use stale instr_a value; PC advances but bus_addr computation uses pre-update register values
-- Identified: non-blocking assignment timing issue in bus controller - result_commit and bus_addr computed on same clock edge causes bus_addr to use old offset value
+- 2 tests (OP_MOVE/OP_LOADI/OP_RETURN1 and OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL) - OP_MOVE now writes correct data to stack[1]=0, but OP_LOADI still fails (stack[2]=0 instead of 0x200) due to instr_a being stale during microcode execution; PC advances correctly through instructions
+- Fixed: microcode sequencer stall on reg_cache miss, sequencer address output for ROM addressing, bus controller direct memory writes
+- Identified: instr_a operand is stale during microcode execution because decode happens after microcode starts; need to ensure decode completes before microcode uses operands
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)
