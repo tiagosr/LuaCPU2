@@ -11,38 +11,23 @@ module mem_model #(
     input  wire wr
 );
 
-    // Memory array (4096 x 32-bit words)
     reg [31:0] memory [0:TOTAL_MEM-1];
 
-    // Bus state
-    reg bus_busy;
-    reg [31:0] pending_addr;
-    reg pending_wr;
-
-    // Initialize memory to zero
     initial begin
         for (int i = 0; i < TOTAL_MEM; i++) begin
             memory[i] = 0;
         end
     end
 
-    // Ready signal (1 when idle)
-    assign rdy = ~bus_busy;
+    assign rdy = 1'b1;
+    assign ack = req;
+    assign data_out = (~wr) ? memory[addr] : 32'h0;
 
-    // Ack signal (1 when busy - transfer in progress)
-    assign ack = bus_busy;
-
-    // Read data output (valid when transfer complete)
-    assign data_out = (bus_busy && ~pending_wr) ? memory[pending_addr] : 32'h0;
-
-    // Bus handshake: 1-cycle latency (no write-thru)
     always @(posedge clk) begin
-        if (req && rdy) begin
-            bus_busy = 1;
-            pending_addr = addr;
-            pending_wr = wr;
-        end else if (bus_busy) begin
-            bus_busy = 0;
+        if (req) begin
+            if (wr) begin
+                memory[addr] = data_in;
+            end
         end
     end
 

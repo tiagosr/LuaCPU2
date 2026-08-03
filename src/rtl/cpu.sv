@@ -26,10 +26,7 @@ module cpu #(
     output reg [7:0] error_code
 );
 
-    // PC register
     reg [31:0] pc;
-
-    // Instruction register and operand fields
     reg [31:0] ir;
     reg [7:0] instr_a;
     reg [7:0] instr_b;
@@ -40,28 +37,22 @@ module cpu #(
     reg [24:0] instr_ax;
     reg instr_decoded;
 
-    // Bus state machine
     reg bus_idle;
     reg bus_request;
     reg bus_wait;
 
-    // K-table read buffer
     reg [31:0] ktable_data;
     reg ktable_valid;
     reg ktable_waiting;
 
-    // Microcode ROM address
     wire [9:0] microcode_rom_addr;
 
-    // Register cache interface
     wire [63:0] reg_cache_read_data;
     wire reg_cache_read_valid;
     wire reg_cache_stall;
 
-    // Microcode ROM interface
     wire [63:0] microcode_rom_data;
 
-    // Microcode sequencer interface
     wire [4:0] microcode_alu_op;
     wire [3:0] microcode_reg_a_write;
     wire [3:0] microcode_reg_b_read;
@@ -78,52 +69,40 @@ module cpu #(
     wire [9:0] microcode_branch_target;
     wire [9:0] microcode_sequencer_addr;
 
-    // Stack pointer interface
     wire [31:0] stack_ptr_wb;
 
-    // Instruction ROM interface
     wire [31:0] instr_rom_data;
 
-    // ALU interface
     wire [63:0] alu_result;
     wire alu_result_valid;
     wire alu_div_zero_flag;
     wire alu_type_error_flag;
 
-    // Value converter interface
     wire [63:0] value_conv_load_value;
     wire value_conv_load_value_valid;
 
-    // Write commit
-    reg write_commit;
-    reg [63:0] write_data;
-    reg [7:0] write_offset;
-
     localparam KTABLE_BASE = 256;
 
-    // Register cache read offset
     wire [7:0] reg_cache_read_offset;
     assign reg_cache_read_offset = (microcode_active && microcode_enable && microcode_reg_b_read != 4'h0) ? instr_b : instr_a;
 
-    // Instantiate instruction ROM
     instr_rom instr_rom_inst (
         .clk(clk),
         .address(pc),
         .data(instr_rom_data)
     );
 
-    // Instantiate register cache
     reg_cache reg_cache_inst (
         .clk(clk),
         .reset(reset),
         .wb(stack_ptr_wb),
         .operand_offset(reg_cache_read_offset),
         .write_offset(instr_a),
-        .read_req(microcode_active && microcode_enable && microcode_reg_b_read != 4'h0),
+        .read_req(microcode_active && microcode_enable && microcode_reg_b_read != 4'h0 && !reg_cache_stall),
         .read_valid(reg_cache_read_valid),
         .read_data(reg_cache_read_data),
-        .write_req(write_commit && bus_idle && instr_decoded),
-        .write_data(write_data),
+        .write_req(0),
+        .write_data(0),
         .bus_resp_valid(bus_ack && bus_rdy && bus_wr == 0),
         .bus_resp_data({bus_data_in, bus_data_in}),
         .cache_miss(),
@@ -133,7 +112,6 @@ module cpu #(
         .miss_count()
     );
 
-    // Instantiate ALU
     alu alu_inst (
         .clk(clk),
         .reset(reset),
@@ -149,7 +127,7 @@ module cpu #(
         .type_error_flag(alu_type_error_flag)
     );
 
-    // Instantiate value converter
+    /* verilator lint_off PINMISSING */
     value_conv value_conv_inst (
         .clk(clk),
         .reset(reset),
@@ -157,17 +135,17 @@ module cpu #(
         .immediate(microcode_immediate),
         .ktable_data({ktable_data, ktable_data}),
         .load_value(value_conv_load_value),
-        .load_value_valid(value_conv_load_value_valid)
+        .load_value_valid(value_conv_load_value_valid),
+        .load_value_valid_comb()
     );
+    /* verilator lint_on PINMISSING */
 
-    // Instantiate microcode ROM
     microcode_rom microcode_rom_inst (
         .clk(clk),
         .address(microcode_rom_addr),
         .data(microcode_rom_data)
     );
 
-    // Instantiate microcode sequencer
     microcode_seq microcode_seq_inst (
         .clk(clk),
         .reset(reset),
@@ -198,14 +176,13 @@ module cpu #(
         .micro_stall_in(reg_cache_stall || ktable_waiting)
     );
 
-    // Instantiate stack pointer
     stack_ptr stack_ptr_inst (
         .clk(clk),
         .reset(reset),
         .wb(stack_ptr_wb),
         .stack_ptr_out(),
         .top(),
-        .stack_push(write_commit && bus_wr),
+        .stack_push(0),
         .stack_pop(0),
         .stack_push_count(8'h1),
         .wb_update(microcode_active && microcode_stack_op != 2'h0),
@@ -215,17 +192,16 @@ module cpu #(
         .clear_top(microcode_done)
     );
 
-    // Microcode ROM address
     assign microcode_rom_addr = microcode_sequencer_addr;
 
-    // PC update
+    // PC update - increments after decode completes
     always @(posedge clk) begin
         if (reset) begin
             pc <= 0;
             instr_decoded <= 0;
         end else if (halt_flag || error_flag) begin
             pc <= pc;
-        end else if (instr_decoded && !reg_cache_stall && !microcode_active && !ktable_waiting) begin
+        end else if (instr_decoded && !microcode_active && !reg_cache_stall && !ktable_waiting) begin
             pc <= pc + 1;
             instr_decoded <= 0;
         end else if (microcode_active && microcode_pc_op == 3'h1) begin
@@ -237,7 +213,7 @@ module cpu #(
         end
     end
 
-    // Instruction decode
+    // Instruction decode - happens when not microcode active and not stalled
     always @(posedge clk) begin
         if (reset) begin
             ir <= 0;
@@ -287,40 +263,7 @@ module cpu #(
         end
     end
 
-    // Write commit data selection
-    always @(posedge clk) begin
-        if (reset) begin
-            write_data <= 0;
-            write_offset <= 0;
-            write_commit <= 0;
-        end else if (halt_flag || error_flag) begin
-            write_commit <= 0;
-        end else if (microcode_active && microcode_enable && microcode_reg_a_write == 4'h0 && !bus_request) begin
-            if (microcode_mem_op == 3'h1 && ktable_valid) begin
-                write_data <= {ktable_data, ktable_data};
-                write_offset <= instr_a;
-                write_commit <= 1;
-            end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
-                write_data <= alu_result;
-                write_offset <= instr_a;
-                write_commit <= 1;
-            end else if (reg_cache_read_valid && microcode_reg_b_read != 4'h0) begin
-                write_data <= reg_cache_read_data;
-                write_offset <= instr_a;
-                write_commit <= 1;
-            end else if (value_conv_load_value_valid) begin
-                write_data <= value_conv_load_value;
-                write_offset <= instr_a;
-                write_commit <= 1;
-            end else begin
-                write_commit <= 0;
-            end
-        end else begin
-            write_commit <= 0;
-        end
-    end
-
-    // Bus controller
+    // Bus controller - handles reads and writes directly to external memory
     always @(posedge clk) begin
         if (reset) begin
             bus_idle <= 1;
@@ -343,13 +286,38 @@ module cpu #(
                     bus_req <= 1;
                     bus_idle <= 0;
                     bus_request <= 1;
-                end else if (write_commit) begin
-                    bus_addr <= write_offset + stack_ptr_wb;
-                    bus_data_out <= write_data[31:0];
-                    bus_wr <= 1;
-                    bus_req <= 1;
-                    bus_idle <= 0;
-                    bus_request <= 1;
+                end else if (microcode_active && microcode_enable && microcode_reg_a_write == 4'h0) begin
+                    if (microcode_mem_op == 3'h1 && ktable_valid) begin
+                        // K-table read already done, write result to stack
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= {ktable_data, ktable_data}[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_idle <= 0;
+                        bus_request <= 1;
+                    end else if (microcode_alu_op != 5'h0 && alu_result_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= alu_result[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_idle <= 0;
+                        bus_request <= 1;
+                    end else if (reg_cache_read_valid && microcode_reg_b_read != 4'h0) begin
+                        // OP_MOVE: copy R[B] to R[A]
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= reg_cache_read_data[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_idle <= 0;
+                        bus_request <= 1;
+                    end else if (value_conv_load_value_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= value_conv_load_value[31:0];
+                        bus_wr <= 1;
+                        bus_req <= 1;
+                        bus_idle <= 0;
+                        bus_request <= 1;
+                    end
                 end
             end else if (bus_request) begin
                 if (bus_rdy) begin

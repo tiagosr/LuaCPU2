@@ -14,7 +14,8 @@ module value_conv #(
 
     output reg [63:0] load_value,
 
-    output reg load_value_valid
+    output reg load_value_valid,
+    output wire load_value_valid_comb
 );
 
     // Type tag constants

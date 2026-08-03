@@ -83,9 +83,9 @@ module cpu_tb;
             cycle_count = cycle_count + 1;
 
             if (cycle_count >= 8 && cycle_count <= 50) begin
-                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b micro_active=%0b micro_done=%0b instr_a=%0h instr_decoded=%0b",
+                $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b micro_active=%0b micro_done=%0b instr_a=%0h",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag,
-                    cpu_inst.microcode_active, cpu_inst.microcode_done, cpu_inst.instr_a, cpu_inst.instr_decoded);
+                    cpu_inst.microcode_active, cpu_inst.microcode_done, cpu_inst.instr_a);
             end
 
             if (halt_flag || error_flag) break;
