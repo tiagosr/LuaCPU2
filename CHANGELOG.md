@@ -1,7 +1,7 @@
 ### 🧪 Test Results
-- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing due to Verilator --timing registered signal alignment issues; bus controller writes to wrong addresses, PC advances incorrectly
-- Fixed: bus controller handles reg_cache cache miss reads, write-backs triggered on microcode_done_prev, PC increment uses microcode_done edge detection, instruction decode uses direct microcode_active signal
-- Identified: Verilator --timing causes registered signals from other modules to be unavailable in same clock edge; bus controller combinational logic depends on registered signals (reg_cache_read_valid, alu_result_valid, ktable_valid, value_conv_load_value_valid); pipeline registers added but tests still failing due to timing mismatch
+- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing; PC timing fixed (stays correct during microcode execution) but bus writes still to wrong addresses due to latched signal timing mismatch
+- Fixed: microcode_done now correctly 0 for non-terminate branches (continue/conditional), bus controller restructured with dedicated writeback state, pipeline registers added for microcode signal latching at sequence boundary, ktable data routed through b_operand_pipe for pass operations
+- Identified: PC advances at microcode boundary before next instruction is decoded; latched signals capture wrong values due to Verilator --timing registered signal alignment
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)
@@ -31,3 +31,9 @@
 - Microcode sequencer: added immediate_source for OP_LOADK (7'h03) using instr_bx
 - Testbench: corrected bytecode encoding for OP_MOVE, OP_LOADI, OP_RETURN1, OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL, OP_JMP
 - reg_cache: converted blocking assignments to non-blocking assignments for Verilator compatibility
+- Microcode sequencer: microcode_done fixed to 0 for continue (2'h0) and conditional (2'h2) branches, only 1 for terminate (2'h1)
+- CPU: pipeline registers added to latch microcode signals (alu_op, reg_a/b/c read/write, mem_op, enable, immediate, instr_a, b_operand_pipe, reg_cache_read_valid, alu_result_valid, ktable_valid, ktable_data, value_conv_load_value) at microcode sequence boundary
+- CPU: PC update logic fixed to use micro_active_prev edge detection (1→0 transition) for sequence termination
+- CPU: bus controller restructured with 4-state machine (idle, request, writeback, wait) using latched signals for write-back
+- CPU: ktable data routing fixed - b_operand_latch updates from ktable_data when ktable_valid and mem_op=1
+- CPU: bus controller state machine fixed - removed duplicate bus_wait block, proper if-else chaining

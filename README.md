@@ -14,10 +14,10 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
 - CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
-- Verilator --timing registered signal alignment - bus controller combinational logic depends on registered signals from reg_cache, alu, value_conv, ktable; pipeline registers added but timing mismatch causes writes to wrong addresses
+- Verilator --timing registered signal alignment - PC/decode timing ordering issue (PC advances at microcode boundary before next instruction decoded); latched signals capture wrong values; bus writes to incorrect addresses
+- Microcode_done signal alignment - latching trigger fires at wrong edge for single-step vs multi-step instructions
 
 ### 🔜 Next Steps
-- Restructure bus controller to use microcode_done as trigger for write requests with proper register staging
 - Implement DDR1 memory interface, along with a simulation for the Verilator tests
 - Verify OP_ADD two-operand datapath (needs separate B and C operand reads)
 - Implement k-table read path for OP_ADDK, OP_SUBK, OP_MULK and other K-operand instructions
