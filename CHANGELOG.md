@@ -1,21 +1,18 @@
 ### 🧪 Test Results
-- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing; bus_data_out always 0 due to writeback triggering before ALU/result data validity signals are registered; PC increments rapidly without proper writeback completion
-- Fixed: reg_cache_read_c_req allows simultaneous B and C operand reads for OP_ADD; microcode sequencer uses multi-step sequences for OP_ADDK/OP_SUBK/OP_MULK; microcode ROM depth expanded to 2048; bus writeback timing fixed using writeback_ready signal instead of edge detection; PC update logic fixed to clear instr_decoded and increment PC when writeback_ready is true; testbench preloads instruction ROM and k-table BEFORE reset deassertion; alu_operand_b fixed to use reg_cache_read_c_data when microcode_reg_c_read active; reg_cache_stall_c added to micro_stall_in
-- Identified: Verilator --timing mode causes edge detection signals (micro_done_edge, micro_active_falling) to fail because registered signals evaluated at different cycle phases; writeback_ready set when microcode sequence completes but data validity signals (alu_result_valid, reg_cache_read_valid) are registered 1 cycle behind; requires architectural redesign of writeback pipeline timing
+- 4 tests (OP_MOVE/OP_LOADI/OP_RETURN1, OP_LOADK/OP_LOADTRUE/OP_LOADFALSE/OP_LOADNIL, OP_ADD two-operand, OP_ADDK k-table) - all failing; PC stuck at 1, bus_wr=1 but bus_req=0, writeback pending but bus not requesting; logic still needs debugging
+- Verilator --timing mode now compiles successfully with flattened cpu.sv; all sub-modules removed from src/rtl/
+- Flattened cpu.sv embeds all sub-module logic: instruction ROM, microcode ROM, register cache, ALU, value converter, microcode sequencer, stack pointer, bus controller
+- Register cache logic moved to sequential block (arrays updated on clock edge), combinational logic only for scalar computations
+- ALU and value converter use combinational next-state logic with sequential pipeline registers
+- Microcode sequencer, stack pointer, bus controller, writeback pipeline use combinational next-state + sequential state update pattern
 
 ### ✅ Completed
 - Specification written at [SPEC.md](docs/SPEC.md)
 - CPU module scaffolding with clock, reset, external memory bus interface, UART interface, error/halt signals, and parameter definitions
 - Verilator test suite with testbench, external memory model, UART model, and Makefile
-- CPU top-level module scaffolding at [src/rtl/cpu.sv](src/rtl/cpu.sv) with all parameters, I/O interfaces, and submodule placeholders
-- Register write-thru cache module at [src/rtl/reg_cache.sv](src/rtl/reg_cache.sv) with 32-entry LRU cache, write-thru bus forwarding, cache miss stall handling, and window invalidation
-- Stack pointer and window base manager module at [src/rtl/stack_ptr.sv](src/rtl/stack_ptr.sv) with stack push/pop, WB advance/retreat/set operations, overflow detection, and top marker tracking
-- Microcode ROM at [src/rtl/microcode_rom.sv](src/rtl/microcode_rom.sv) with 1024×64-bit entries covering all Lua 5.4 opcodes, reorganized with DONE_OFFSET for multi-step operations
-- Microcode sequencer at [src/rtl/microcode_seq.sv](src/rtl/microcode_seq.sv) with variable-length sequence support, branching, DONE_OFFSET continuation, and immediate operand decoding
-- Instruction ROM at [src/rtl/instr_rom.sv](src/rtl/instr_rom.sv) for on-chip bytecode storage
-- Full CPU integration with register cache, microcode sequencer, stack pointer, and instruction ROM wired together
-- ALU datapath module at [src/rtl/alu.sv](src/rtl/alu.sv) with NaN-boxed integer/double arithmetic, bitwise operations, comparisons, and type detection
-- Value converter module at [src/rtl/value_conv.sv](src/rtl/value_conv.sv) for NaN-boxing immediate values and k-table data
+- Flattened cpu.sv at [src/rtl/cpu.sv](src/rtl/cpu.sv) with all sub-module logic embedded: instruction ROM, microcode ROM (2048 entries), 32-entry LRU register cache, ALU with NaN-boxed arithmetic, value converter, microcode sequencer, stack pointer/window base, bus controller
+- All sub-modules removed from src/rtl/ (instr_rom.sv, reg_cache.sv, alu.sv, value_conv.sv, microcode_rom.sv, microcode_seq.sv, stack_ptr.sv, bus_ctrl.sv)
+- Verilator --timing mode compiles successfully with single-module architecture
 - OP_MOVE, OP_LOADI, OP_LOADK microcode sequences with two-step execution (read then write)
 - Testbench with bytecode preload and register value verification
 - Value converter module extended with LOADTRUE (alu_op=5'h2), LOADFALSE (alu_op=5'h3), LOADNIL (alu_op=5'h4) operations

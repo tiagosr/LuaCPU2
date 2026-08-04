@@ -1,30 +1,22 @@
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 module stack_ptr #(
-    parameter STACK_SIZE = 256
+    parameter PARAM_STACK = 256
 )(
     input  wire clk,
     input  wire reset,
-
     output reg [31:0] wb,
-
     output reg [31:0] stack_ptr_out,
-
     output reg [31:0] top,
-
-    input  wire stack_push,
-    input  wire stack_pop,
+    input  wire [1:0] stack_push,
+    input  wire [1:0] stack_pop,
     input  wire [7:0] stack_push_count,
-
     input  wire wb_update,
     input  wire [1:0] wb_op,
     input  wire [15:0] wb_value,
-
-    output reg stack_overflow,
-
+    output reg [31:0] stack_overflow,
     input  wire clear_top
 );
-
-    reg [31:0] next_stack_ptr;
-    reg [31:0] next_wb;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -35,43 +27,30 @@ module stack_ptr #(
         end else begin
             if (wb_update) begin
                 case (wb_op)
-                    2'b00: next_wb <= wb;
-                    2'b01: next_wb <= wb + {16'h0000, wb_value};
+                    2'b00: wb <= wb;
+                    2'b01: wb <= wb + wb_value;
                     2'b10: begin
-                        if (wb >= {16'h0000, wb_value})
-                            next_wb <= wb - {16'h0000, wb_value};
+                        if (wb >= wb_value)
+                            wb <= wb - wb_value;
                         else
-                            next_wb <= 0;
+                            wb <= 0;
                     end
-                    2'b11: next_wb <= {16'h0000, wb_value};
+                    2'b11: wb <= wb_value;
                 endcase
-            end else begin
-                next_wb <= wb;
             end
 
             if (stack_push) begin
-                if (stack_push_count == 0)
-                    next_stack_ptr <= stack_ptr_out + 1;
-                else
-                    next_stack_ptr <= stack_ptr_out + {24'h000000, stack_push_count};
+                stack_ptr_out <= stack_ptr_out + stack_push_count;
             end else if (stack_pop) begin
-                if (stack_ptr_out >= {24'h000000, stack_push_count})
-                    next_stack_ptr <= stack_ptr_out - {24'h000000, stack_push_count};
-                else
-                    next_stack_ptr <= 0;
-            end else begin
-                next_stack_ptr <= stack_ptr_out;
+                stack_ptr_out <= stack_ptr_out - stack_push_count;
             end
 
             if (clear_top)
                 top <= 0;
             else
-                top <= next_stack_ptr;
+                top <= stack_ptr_out;
 
-            stack_ptr_out <= next_stack_ptr;
-            wb <= next_wb;
-
-            if (next_stack_ptr >= STACK_SIZE)
+            if (stack_ptr_out >= PARAM_STACK)
                 stack_overflow <= 1;
             else
                 stack_overflow <= 0;
@@ -79,3 +58,5 @@ module stack_ptr #(
     end
 
 endmodule
+/* verilator lint_on WIDTHTRUNC */
+/* verilator lint_on WIDTHEXPAND */

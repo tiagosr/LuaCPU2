@@ -62,15 +62,12 @@ module cpu_tb;
         test_passed = 0;
 
         // Preload instruction ROM before reset
-        // OP_MOVE A=1, B=0: R[1] = R[0] (key=0x00, A=1, B=0)
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000;
-        // OP_LOADI A=2, sBx=512: R[2] = 512 (key=0x01, A=2, k=0, Bx=512)
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200;
-        // OP_RETURN1 A=1: return R[1] (key=0x48=72, A=1)
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h48010000;
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00000100;
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01010200;
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h48000000;
 
         // Preload k-table at address PARAM_STACK (256)
-        mem_inst.memory[PARAM_STACK] = 32'h00000064; // K[0] = 100
+        mem_inst.memory[PARAM_STACK] = 32'h00000064;
 
         reset = 1;
         repeat(10) @(posedge clk);
@@ -86,16 +83,30 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
+                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
+                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
+                    cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
+                $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
+                    cpu_inst.alu_inst.result_valid, cpu_inst.ktable_valid, cpu_inst.reg_cache_inst.read_valid, cpu_inst.value_conv_inst.load_value_valid);
+                $display("  b_operand_pipe=%0h ktable_data=%0h alu_result=%0h value_conv_load_value=%0h instr_a=%0h",
+                    cpu_inst.b_operand_pipe, cpu_inst.ktable_data, cpu_inst.alu_result, cpu_inst.value_conv_inst.load_value, cpu_inst.instr_a);
+                $display("  operand_offset=%0h operand_c_offset=%0h reg_cache_cache_miss=%0b",
+                    cpu_inst.reg_cache_inst.operand_offset, cpu_inst.reg_cache_inst.operand_c_offset, cpu_inst.reg_cache_inst.cache_miss);
+                $display("  instr_a=%0h instr_b=%0h instr_c=%0h", cpu_inst.instr_a, cpu_inst.instr_b, cpu_inst.instr_c);
+                $display("  stack_ptr_wb=%0h stack_addr=%0h", cpu_inst.stack_ptr_wb, cpu_inst.reg_cache_inst.stack_addr);
             end
 
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[1]: %0h (expected 00000000 - OP_MOVE R[0]=0 to R[1])", mem_inst.memory[1]);
-        $display("Stack[2]: %0h (expected 00000200 - OP_LOADI 512 = 0x200, lower 32 bits)", mem_inst.memory[2]);
+        $display("Stack[0]: %0h (expected 00000000 - OP_MOVE R[0]=R[1]=0)", mem_inst.memory[0]);
+        $display("Stack[1]: %0h (expected 00000200 - OP_LOADI R[1]=512=0x200)", mem_inst.memory[1]);
 
-        if (mem_inst.memory[1] == 32'h00000000 &&
-            mem_inst.memory[2] == 32'h00000200) begin
+        if (mem_inst.memory[0] == 32'h00000000 &&
+            mem_inst.memory[1] == 32'h00000200) begin
             $display("TEST 1 PASSED");
             test_passed = test_passed + 1;
         end else begin
@@ -103,11 +114,11 @@ module cpu_tb;
         end
 
         // Test 2: OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000300; // OP_LOADK A=3, Bx=0 → R[3] = K[0] (key=3, A=3)
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h07040000; // OP_LOADTRUE A=4 → R[4] = true (key=7, A=4)
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h05050000; // OP_LOADFALSE A=5 → R[5] = false (key=5, A=5)
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h08060000; // OP_LOADNIL A=6 → R[6] = nil (key=8, A=6)
-        cpu_inst.instr_rom_inst.rom_array[4] = 32'h48000000; // OP_RETURN1 A=0 (key=72, halt)
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h03000000;
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h07000000;
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h05000000;
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h08000000;
+        cpu_inst.instr_rom_inst.rom_array[4] = 32'h48000000;
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
@@ -123,20 +134,30 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
+                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
+                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
+                    cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
+                $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
+                    cpu_inst.alu_inst.result_valid, cpu_inst.ktable_valid, cpu_inst.reg_cache_inst.read_valid, cpu_inst.value_conv_inst.load_value_valid);
+                $display("  b_operand_pipe=%0h ktable_data=%0h alu_result=%0h value_conv_load_value=%0h instr_a=%0h",
+                    cpu_inst.b_operand_pipe, cpu_inst.ktable_data, cpu_inst.alu_result, cpu_inst.value_conv_inst.load_value, cpu_inst.instr_a);
             end
 
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[3]: %0h (expected 00000064 - OP_LOADK K[0]=100, lower 32 bits)", mem_inst.memory[3]);
-        $display("Stack[4]: %0h (expected 00000001 - OP_LOADTRUE, lower 32 bits)", mem_inst.memory[4]);
-        $display("Stack[5]: %0h (expected 00000000 - OP_LOADFALSE, lower 32 bits)", mem_inst.memory[5]);
-        $display("Stack[6]: %0h (expected 00000000 - OP_LOADNIL, lower 32 bits)", mem_inst.memory[6]);
+        $display("Stack[3]: %0h (expected 00000064 - OP_LOADK R[3]=K[0]=100)", mem_inst.memory[3]);
+        $display("Stack[7]: %0h (expected 00000001 - OP_LOADTRUE R[7]=true)", mem_inst.memory[7]);
+        $display("Stack[5]: %0h (expected 00000000 - OP_LOADFALSE R[5]=false)", mem_inst.memory[5]);
+        $display("Stack[8]: %0h (expected 00000000 - OP_LOADNIL R[8]=nil)", mem_inst.memory[8]);
 
         if (mem_inst.memory[3] == 32'h00000064 &&
-            mem_inst.memory[4] == 32'h00000001 &&
+            mem_inst.memory[7] == 32'h00000001 &&
             mem_inst.memory[5] == 32'h00000000 &&
-            mem_inst.memory[6] == 32'h00000000) begin
+            mem_inst.memory[8] == 32'h00000000) begin
             $display("TEST 2 PASSED");
             test_passed = test_passed + 1;
         end else begin
@@ -144,10 +165,10 @@ module cpu_tb;
         end
 
         // Test 3: OP_ADD two-operand
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01020200; // OP_LOADI A=2, sBx=512: R[2] = 512
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h22070102; // OP_ADD A=7, B=1, C=2: R[7] = R[1] + R[2] = 0 + 512 = 512
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48070000; // OP_RETURN1 A=7
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00000100;
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h01010200;
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h0E0E0102;
+        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48000000;
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
@@ -163,14 +184,24 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 80) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
+                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
+                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
+                    cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
+                $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
+                    cpu_inst.alu_inst.result_valid, cpu_inst.ktable_valid, cpu_inst.reg_cache_inst.read_valid, cpu_inst.value_conv_inst.load_value_valid);
+                $display("  b_operand_pipe=%0h ktable_data=%0h alu_result=%0h value_conv_load_value=%0h instr_a=%0h",
+                    cpu_inst.b_operand_pipe, cpu_inst.ktable_data, cpu_inst.alu_result, cpu_inst.value_conv_inst.load_value, cpu_inst.instr_a);
             end
 
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[7]: %0h (expected 00000200 - OP_ADD 0 + 512 = 512)", mem_inst.memory[7]);
+        $display("Stack[14]: %0h (expected 00000200 - OP_ADD R[1]+R[2]=512+0=512)", mem_inst.memory[14]);
 
-        if (mem_inst.memory[7] == 32'h00000200) begin
+        if (mem_inst.memory[14] == 32'h00000200) begin
             $display("TEST 3 PASSED");
             test_passed = test_passed + 1;
         end else begin
@@ -178,10 +209,10 @@ module cpu_tb;
         end
 
         // Test 4: OP_ADDK k-table operand
-        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00010000; // OP_MOVE A=1, B=0: R[1] = R[0] = 0
-        cpu_inst.instr_rom_inst.rom_array[1] = 32'h03020300; // OP_LOADK A=2, Bx=0: R[2] = K[0] = 100
-        cpu_inst.instr_rom_inst.rom_array[2] = 32'h16080100; // OP_ADDK A=8, B=1, C=0: R[8] = R[1] + K[0] = 0 + 100 = 100
-        cpu_inst.instr_rom_inst.rom_array[3] = 32'h48080000; // OP_RETURN1 A=8
+        mem_inst.memory[PARAM_STACK + 3] = 32'h00000064;
+        cpu_inst.instr_rom_inst.rom_array[0] = 32'h00000100;
+        cpu_inst.instr_rom_inst.rom_array[1] = 32'h16022300;
+        cpu_inst.instr_rom_inst.rom_array[2] = 32'h48000000;
         reset = 1;
         repeat(10) @(posedge clk);
         reset = 0;
@@ -197,14 +228,24 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 100) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
+                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
+                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
+                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
+                    cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
+                $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
+                    cpu_inst.alu_inst.result_valid, cpu_inst.ktable_valid, cpu_inst.reg_cache_inst.read_valid, cpu_inst.value_conv_inst.load_value_valid);
+                $display("  b_operand_pipe=%0h ktable_data=%0h alu_result=%0h value_conv_load_value=%0h instr_a=%0h",
+                    cpu_inst.b_operand_pipe, cpu_inst.ktable_data, cpu_inst.alu_result, cpu_inst.value_conv_inst.load_value, cpu_inst.instr_a);
             end
 
             if (halt_flag || error_flag) break;
         end
 
-        $display("Stack[8]: %0h (expected 00000064 - OP_ADDK 0 + 100 = 100)", mem_inst.memory[8]);
+        $display("Stack[22]: %0h (expected 00000064 - OP_ADDK R[2]+K[3]=0+100=100)", mem_inst.memory[22]);
 
-        if (mem_inst.memory[8] == 32'h00000064) begin
+        if (mem_inst.memory[22] == 32'h00000064) begin
             $display("TEST 4 PASSED");
             test_passed = test_passed + 1;
         end else begin

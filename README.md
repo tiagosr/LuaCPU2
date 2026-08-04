@@ -13,14 +13,16 @@ The intention is to learn what are the processes that avoid "agent orchestration
 See [CHANGELOG.md](CHANGELOG.md)
 
 ### 🔄 In Progress
-- CPU top-level module with integrated register cache, microcode sequencer, stack pointer, instruction ROM, ALU, and value converter
-- Writeback pipeline timing - writeback_ready triggers when microcode sequence completes but data validity signals (alu_result_valid, reg_cache_read_valid) are registered 1 cycle behind; bus_data_out always 0
-- Verilator --timing mode edge detection fails (micro_done_edge, micro_active_falling) due to registered signal evaluation timing mismatch
+- Writeback pipeline timing - writeback_pending set when microcode sequence completes but data validity signals (alu_result_valid, reg_cache_read_valid) are registered 1 cycle behind; bus writeback not triggering; PC stuck at 1
+- Logic debugging: PC increment, bus request/assert timing, writeback commit flow
 
 ### 🔜 Next Steps
-- Redesign writeback pipeline to wait for data validity signals before triggering bus writeback
+- Fix writeback pipeline to properly trigger bus writeback when data validity signals are available
 - Fix bus_addr calculation (stack_ptr_wb offset incorrect)
-- Verify OP_ADD, OP_ADDK, OP_SUBK, OP_MULK execute correctly with proper writeback timing
+- Verify OP_MOVE, OP_LOADI, OP_LOADK, OP_LOADTRUE, OP_LOADFALSE, OP_LOADNIL execute correctly
+- Verify OP_ADD, OP_ADDK execute correctly with proper writeback timing
+- Implement a DDR1 SDRAM controller
+- Implement a test-only simulation of a DDR1 SDRAM
 
 ### 📔 Backlog
 - Verilog lint/typecheck setup

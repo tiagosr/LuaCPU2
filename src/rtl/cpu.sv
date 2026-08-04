@@ -45,6 +45,9 @@ module cpu #(
     reg [63:0] b_operand_latch;
     reg [63:0] b_operand_pipe;
 
+    reg [63:0] value_conv_latched_value;
+    reg value_conv_latched_valid;
+
     reg writeback_ready;
 
     reg [31:0] ktable_data;
@@ -101,8 +104,8 @@ module cpu #(
     wire [7:0] reg_cache_read_offset;
     wire [7:0] reg_cache_read_c_offset;
 
-    assign reg_cache_read_b_req = microcode_active && microcode_enable && microcode_reg_b_read != 4'h0 && microcode_reg_b_read != 4'h3;
-    assign reg_cache_read_c_req = microcode_active && microcode_enable && microcode_reg_c_read != 4'h0 && microcode_reg_c_read != 4'h3;
+    assign reg_cache_read_b_req = latched_enable && latched_reg_b_read != 4'h0 && latched_reg_b_read != 4'h3;
+    assign reg_cache_read_c_req = latched_enable && latched_reg_c_read != 4'h0 && latched_reg_c_read != 4'h3;
     assign reg_cache_read_offset = reg_cache_read_b_req ? instr_b : instr_a;
     assign reg_cache_read_c_offset = reg_cache_read_c_req ? instr_c : instr_a;
 
@@ -235,6 +238,8 @@ module cpu #(
     reg latched_enable;
     reg [33:0] latched_immediate;
     reg [7:0] latched_instr_a;
+    reg [7:0] latched_instr_b;
+    reg [7:0] latched_instr_c;
     reg [63:0] latched_b_operand_pipe;
     reg latched_reg_cache_read_valid;
     reg latched_reg_cache_read_c_valid;
@@ -242,6 +247,7 @@ module cpu #(
     reg latched_ktable_valid;
     reg [63:0] latched_ktable_data;
     reg [63:0] latched_value_conv_load_value;
+    reg [1:0] latched_value_conv_load_value_valid;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -271,6 +277,8 @@ module cpu #(
             latched_enable <= 1'b0;
             latched_immediate <= 34'h0;
             latched_instr_a <= 0;
+            latched_instr_b <= 0;
+            latched_instr_c <= 0;
             latched_b_operand_pipe <= 0;
             latched_reg_cache_read_valid <= 0;
             latched_reg_cache_read_c_valid <= 0;
@@ -278,6 +286,9 @@ module cpu #(
             latched_ktable_valid <= 0;
             latched_ktable_data <= 0;
             latched_value_conv_load_value <= 0;
+            latched_value_conv_load_value_valid <= 0;
+            value_conv_latched_value <= 0;
+            value_conv_latched_valid <= 0;
         end else if (halt_flag || error_flag) begin
             latched_alu_op <= 5'h0;
             latched_reg_a_write <= 4'h0;
@@ -291,6 +302,8 @@ module cpu #(
             latched_enable <= 1'b0;
             latched_immediate <= 34'h0;
             latched_instr_a <= 0;
+            latched_instr_b <= 0;
+            latched_instr_c <= 0;
             latched_b_operand_pipe <= 0;
             latched_reg_cache_read_valid <= 0;
             latched_reg_cache_read_c_valid <= 0;
@@ -298,7 +311,12 @@ module cpu #(
             latched_ktable_valid <= 0;
             latched_ktable_data <= 0;
             latched_value_conv_load_value <= 0;
-        end else if (writeback_ready) begin
+        end else if (value_conv_load_value_valid) begin
+            value_conv_latched_value <= value_conv_load_value;
+            value_conv_latched_valid <= 1;
+        end else if (bus_writeback) begin
+            value_conv_latched_valid <= 0;
+        end else if (microcode_writeback_ready && bus_idle && !bus_writeback && !bus_request && !bus_wait) begin
             latched_alu_op <= microcode_alu_op;
             latched_reg_a_write <= microcode_reg_a_write;
             latched_reg_b_read <= microcode_reg_b_read;
@@ -311,6 +329,8 @@ module cpu #(
             latched_enable <= microcode_enable;
             latched_immediate <= microcode_immediate;
             latched_instr_a <= instr_a;
+            latched_instr_b <= instr_b;
+            latched_instr_c <= instr_c;
             latched_b_operand_pipe <= b_operand_pipe;
             latched_reg_cache_read_valid <= reg_cache_read_valid;
             latched_reg_cache_read_c_valid <= reg_cache_read_c_valid;
@@ -318,6 +338,7 @@ module cpu #(
             latched_ktable_valid <= ktable_valid;
             latched_ktable_data <= ktable_data;
             latched_value_conv_load_value <= value_conv_load_value;
+            latched_value_conv_load_value_valid <= value_conv_load_value_valid;
         end
     end
 
@@ -334,7 +355,7 @@ module cpu #(
         end else if (microcode_active && microcode_pc_op == 3'h2) begin
             pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
             instr_decoded <= 0;
-        end else if (writeback_ready && !reg_cache_stall && !ktable_waiting) begin
+        end else if (writeback_ready && !reg_cache_stall && !ktable_waiting && !microcode_active) begin
             instr_decoded <= 0;
             pc <= pc + 1;
         end
@@ -415,6 +436,7 @@ module cpu #(
             bus_data_out <= 0;
             bus_req <= 0;
             bus_wr <= 0;
+            bus_data_out <= 0;
         end else if (halt_flag || error_flag) begin
             bus_idle <= 1;
             bus_request <= 0;
@@ -423,43 +445,45 @@ module cpu #(
             bus_req <= 0;
         end else begin
             if (bus_idle) begin
+                bus_wr <= 0;
+                bus_data_out <= 0;
                 if (ktable_waiting) begin
                     bus_addr <= KTABLE_BASE + latched_immediate[15:0];
                     bus_wr <= 0;
                     bus_req <= 1;
                     bus_idle <= 0;
                     bus_request <= 1;
-                end else if (reg_cache_cache_miss && microcode_mem_op != 3'h1) begin
+                end else if (reg_cache_cache_miss && microcode_mem_op != 3'h1 && !writeback_ready) begin
                     bus_addr <= stack_ptr_wb + reg_cache_read_offset;
                     bus_wr <= 0;
                     bus_req <= 1;
                     bus_idle <= 0;
                     bus_request <= 1;
-                end else if (writeback_ready && latched_enable && !reg_cache_stall && !ktable_waiting) begin
-                    if (latched_alu_op != 5'h0 && latched_alu_result_valid) begin
-                        bus_addr <= latched_instr_a + stack_ptr_wb;
+                end else if (writeback_ready && microcode_enable && !reg_cache_stall && !ktable_waiting) begin
+                    if (microcode_alu_op != 5'h0 && alu_result_valid) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
                         bus_data_out <= alu_result[31:0];
                         bus_wr <= 1;
                         bus_req <= 1;
                         bus_idle <= 0;
                         bus_writeback <= 1;
-                    end else if (latched_ktable_valid && latched_mem_op == 3'h1) begin
-                        bus_addr <= latched_instr_a + stack_ptr_wb;
-                        bus_data_out <= latched_ktable_data[31:0];
+                    end else if (ktable_valid && microcode_mem_op == 3'h1) begin
+                        bus_addr <= instr_a + stack_ptr_wb;
+                        bus_data_out <= ktable_data[31:0];
                         bus_wr <= 1;
                         bus_req <= 1;
                         bus_idle <= 0;
                         bus_writeback <= 1;
-                    end else if (latched_reg_cache_read_valid && latched_alu_op == 5'h0 && latched_reg_b_read != 4'h0) begin
+                    end else if (latched_reg_cache_read_valid && microcode_alu_op == 5'h0 && latched_reg_b_read != 4'h0) begin
                         bus_addr <= latched_instr_a + stack_ptr_wb;
                         bus_data_out <= latched_b_operand_pipe[31:0];
                         bus_wr <= 1;
                         bus_req <= 1;
                         bus_idle <= 0;
                         bus_writeback <= 1;
-                    end else if (value_conv_load_value_valid_comb && latched_alu_op == 5'h0) begin
+                    end else if (value_conv_latched_valid && microcode_alu_op == 5'h0) begin
                         bus_addr <= latched_instr_a + stack_ptr_wb;
-                        bus_data_out <= value_conv_load_value[31:0];
+                        bus_data_out <= value_conv_latched_value[31:0];
                         bus_wr <= 1;
                         bus_req <= 1;
                         bus_idle <= 0;

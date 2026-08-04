@@ -8,17 +8,17 @@ module uart_model #(
     output wire rx_rdy
 );
 
-    logic tx_idle;
-    logic [3:0] tx_bit_count;
-    logic [7:0] tx_shift_reg;
-    logic [7:0] tx_char;
+    reg tx_idle;
+    reg [3:0] tx_bit_count;
+    reg [7:0] tx_shift_reg;
+    reg [7:0] tx_char;
 
-    logic rx_idle;
-    logic [3:0] rx_bit_count;
-    logic [7:0] rx_shift_reg;
-    logic [7:0] rx_char;
+    reg rx_idle;
+    reg [3:0] rx_bit_count;
+    reg [7:0] rx_shift_reg;
+    reg [7:0] rx_char;
 
-    logic [31:0] baud_cnt;
+    reg [31:0] baud_cnt;
 
     assign tx = tx_idle ? 1'b1 : tx_shift_reg[0];
     assign tx_rdy = tx_idle;
