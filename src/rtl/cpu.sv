@@ -34,6 +34,7 @@ module cpu #(
     reg [16:0] instr_bx;
     reg instr_k;
     reg [6:0] opcode_key;
+    reg [1:0] opcode_step;
     reg [24:0] instr_ax;
     reg instr_decoded;
 
@@ -67,8 +68,11 @@ module cpu #(
     wire [63:0] microcode_rom_data;
 
     wire [4:0] microcode_alu_op;
-    wire [3:0] microcode_reg_a_write;
-    wire [3:0] microcode_reg_b_read;
+    wire [1:0] microcode_alu_optype;
+    wire [3:0] microcode_dest_sel;
+    wire [4:0] microcode_operand_a_sel;
+    wire [4:0] microcode_operand_b_sel;
+    wire [3:0] microcode_source;
     wire [3:0] microcode_reg_c_read;
     wire [2:0] microcode_mem_op;
     wire [2:0] microcode_pc_op;
@@ -104,8 +108,8 @@ module cpu #(
     wire [7:0] reg_cache_read_offset;
     wire [7:0] reg_cache_read_c_offset;
 
-    assign reg_cache_read_b_req = latched_enable && latched_reg_b_read != 4'h0 && latched_reg_b_read != 4'h3;
-    assign reg_cache_read_c_req = latched_enable && latched_reg_c_read != 4'h0 && latched_reg_c_read != 4'h3;
+    assign reg_cache_read_b_req = latched_enable && latched_operand_a_sel != 4'h0 && latched_operand_a_sel != 4'h3;
+    assign reg_cache_read_c_req = latched_enable && latched_operand_b_sel != 4'h0 && latched_operand_b_sel != 4'h3;
     assign reg_cache_read_offset = reg_cache_read_b_req ? instr_b : instr_a;
     assign reg_cache_read_c_offset = reg_cache_read_c_req ? instr_c : instr_a;
 
@@ -146,6 +150,7 @@ module cpu #(
         .clk(clk),
         .reset(reset),
         .alu_op(microcode_alu_op),
+        .alu_optype(microcode_alu_optype),
         .operand_a(b_operand_pipe),
         .operand_b(alu_operand_b),
         .operand_c({ktable_data, ktable_data}),
@@ -172,40 +177,19 @@ module cpu #(
 
     microcode_rom microcode_rom_inst (
         .clk(clk),
-        .address(microcode_rom_addr),
-        .data(microcode_rom_data)
-    );
-
-    microcode_seq microcode_seq_inst (
-        .clk(clk),
-        .reset(reset),
-        .opcode_key(opcode_key),
-        .instr_a(instr_a),
-        .instr_b(instr_b),
-        .instr_c(instr_c),
-        .instr_bx(instr_bx),
-        .instr_k(instr_k),
-        .instr_ax(instr_ax),
-        .instr_decoded(instr_decoded),
-        .rom_address(microcode_sequencer_addr),
-        .rom_data(microcode_rom_data),
+        .opcode(opcode_key),
+        .step(opcode_step),
+        .next_microop(),
         .alu_op(microcode_alu_op),
-        .reg_a_write(microcode_reg_a_write),
-        .reg_b_read(microcode_reg_b_read),
-        .reg_c_read(microcode_reg_c_read),
-        .mem_op(microcode_mem_op),
-        .pc_op(microcode_pc_op),
-        .micro_branch(microcode_micro_branch),
-        .gc_step(microcode_gc_step),
-        .stack_op(microcode_stack_op),
-        .enable(microcode_enable),
-        .immediate(microcode_immediate),
-        .micro_active(microcode_active),
-        .micro_done(microcode_done),
-        .micro_writeback_ready(microcode_writeback_ready),
-        .branch_target(microcode_branch_target),
-        .sequencer_addr_out(microcode_sequencer_addr),
-        .micro_stall_in(reg_cache_stall || reg_cache_stall_c || ktable_waiting)
+        .alu_optype(microcode_alu_optype),
+        .dest(microcode_dest_sel),
+        .operand_a_sel(microcode_operand_a_sel),
+        .operand_b_sel(microcode_operand_b_sel),
+        .pc_op(),
+        .branch_op(),
+        .gc_op(),
+        .stack_op(),
+        .enable()
     );
 
     stack_ptr stack_ptr_inst (
@@ -227,10 +211,10 @@ module cpu #(
     assign microcode_rom_addr = microcode_sequencer_addr;
 
     reg [4:0] latched_alu_op;
-    reg [3:0] latched_reg_a_write;
-    reg [3:0] latched_reg_b_read;
-    reg [3:0] latched_reg_c_read;
-    reg [2:0] latched_mem_op;
+    reg [2:0] latched_dest;
+    reg [3:0] latched_operand_a_sel;
+    reg [3:0] latched_operand_b_sel;
+    reg [2:0] latched_mem_op_sel;
     reg [2:0] latched_pc_op;
     reg [1:0] latched_micro_branch;
     reg [1:0] latched_gc_step;
@@ -266,10 +250,10 @@ module cpu #(
     always @(posedge clk) begin
         if (reset) begin
             latched_alu_op <= 5'h0;
-            latched_reg_a_write <= 4'h0;
-            latched_reg_b_read <= 4'h0;
-            latched_reg_c_read <= 4'h0;
-            latched_mem_op <= 3'h0;
+            latched_dest <= 4'h0;
+            latched_operand_a_sel <= 4'h0;
+            latched_operand_b_sel <= 4'h0;
+            latched_mem_op_sel <= 3'h0;
             latched_pc_op <= 3'h0;
             latched_micro_branch <= 2'h1;
             latched_gc_step <= 2'h0;
@@ -291,10 +275,10 @@ module cpu #(
             value_conv_latched_valid <= 0;
         end else if (halt_flag || error_flag) begin
             latched_alu_op <= 5'h0;
-            latched_reg_a_write <= 4'h0;
-            latched_reg_b_read <= 4'h0;
-            latched_reg_c_read <= 4'h0;
-            latched_mem_op <= 3'h0;
+            latched_dest <= 4'h0;
+            latched_operand_a_sel <= 4'h0;
+            latched_operand_b_sel <= 4'h0;
+            latched_mem_op_sel <= 3'h0;
             latched_pc_op <= 3'h0;
             latched_micro_branch <= 2'h1;
             latched_gc_step <= 2'h0;
@@ -318,10 +302,10 @@ module cpu #(
             value_conv_latched_valid <= 0;
         end else if (microcode_writeback_ready && bus_idle && !bus_writeback && !bus_request && !bus_wait) begin
             latched_alu_op <= microcode_alu_op;
-            latched_reg_a_write <= microcode_reg_a_write;
-            latched_reg_b_read <= microcode_reg_b_read;
-            latched_reg_c_read <= microcode_reg_c_read;
-            latched_mem_op <= microcode_mem_op;
+            latched_dest <= microcode_dest_sel;
+            latched_operand_a_sel <= microcode_source;
+            latched_operand_b_sel <= microcode_reg_c_read;
+            latched_mem_op_sel <= microcode_mem_op;
             latched_pc_op <= microcode_pc_op;
             latched_micro_branch <= microcode_micro_branch;
             latched_gc_step <= microcode_gc_step;
@@ -395,7 +379,7 @@ module cpu #(
         end else if (halt_flag || error_flag) begin
             b_operand_latch <= 0;
             b_operand_pipe <= 0;
-        end else if (reg_cache_read_valid && microcode_reg_b_read != 4'h0) begin
+        end else if (reg_cache_read_valid && microcode_source != 4'h0) begin
             b_operand_latch <= reg_cache_read_data;
         end else if (ktable_valid && microcode_mem_op == 3'h1) begin
             b_operand_latch <= {ktable_data, ktable_data};
@@ -474,7 +458,7 @@ module cpu #(
                         bus_req <= 1;
                         bus_idle <= 0;
                         bus_writeback <= 1;
-                    end else if (latched_reg_cache_read_valid && microcode_alu_op == 5'h0 && latched_reg_b_read != 4'h0) begin
+                    end else if (latched_reg_cache_read_valid && microcode_alu_op == 5'h0 && latched_operand_a_sel != 4'h0) begin
                         bus_addr <= latched_instr_a + stack_ptr_wb;
                         bus_data_out <= latched_b_operand_pipe[31:0];
                         bus_wr <= 1;

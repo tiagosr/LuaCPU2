@@ -1,4 +1,3 @@
-`include "microcode_mnemonics.vh"
 /* verilator lint_off WIDTHEXPAND */
 /* verilator lint_off WIDTHTRUNC */
 module alu #(
@@ -11,6 +10,7 @@ module alu #(
     input  wire clk,
     input  wire reset,
     input  wire [4:0] alu_op,
+    input  wire [1:0] alu_optype,
     input  wire [63:0] operand_a,
     input  wire [63:0] operand_b,
     input  wire [63:0] operand_c,
@@ -233,12 +233,9 @@ module alu #(
 
             ALU_NOT: begin
                 alu_next_result_valid = 1'b1;
-                alu_next_result = nan_box_bool(!is_truthy(operand_a));
-            end
-
-            ALU_BNOT: begin
-                alu_next_result_valid = 1'b1;
-                if (is_integer(operand_a)) begin
+                if (alu_optype == ALUOPTYPE_LOGIC) begin
+                    alu_next_result = nan_box_bool(!is_truthy(operand_a));
+                end else if (is_integer(operand_a)) begin
                     alu_next_result = nan_box_integer(~unbox_payload(operand_a));
                 end else begin
                     alu_next_type_error_flag = 1'b1;
@@ -247,7 +244,9 @@ module alu #(
 
             ALU_AND: begin
                 alu_next_result_valid = 1'b1;
-                if (is_integer(operand_a) && is_integer(operand_b)) begin
+                if (alu_optype == ALUOPTYPE_LOGIC) begin
+                    alu_next_result = nan_box_bool(is_truthy(operand_a) & is_truthy(operand_b));
+                end else if (is_integer(operand_a) && is_integer(operand_b)) begin
                     alu_next_result = nan_box_integer(unbox_payload(operand_a) & unbox_payload(operand_b));
                 end else begin
                     alu_next_type_error_flag = 1'b1;
@@ -256,7 +255,9 @@ module alu #(
 
             ALU_OR: begin
                 alu_next_result_valid = 1'b1;
-                if (is_integer(operand_a) && is_integer(operand_b)) begin
+                if (alu_optype == ALUOPTYPE_LOGIC) begin
+                    alu_next_result = nan_box_bool(is_truthy(operand_a) | is_truthy(operand_b));
+                end else if (is_integer(operand_a) && is_integer(operand_b)) begin
                     alu_next_result = nan_box_integer(unbox_payload(operand_a) | unbox_payload(operand_b));
                 end else begin
                     alu_next_type_error_flag = 1'b1;
@@ -265,7 +266,9 @@ module alu #(
 
             ALU_XOR: begin
                 alu_next_result_valid = 1'b1;
-                if (is_integer(operand_a) && is_integer(operand_b)) begin
+                if (alu_optype == ALUOPTYPE_LOGIC) begin
+                    alu_next_result = nan_box_bool(is_truthy(operand_a) ^ is_truthy(operand_b));
+                end else if (is_integer(operand_a) && is_integer(operand_b)) begin
                     alu_next_result = nan_box_integer(unbox_payload(operand_a) ^ unbox_payload(operand_b));
                 end else begin
                     alu_next_type_error_flag = 1'b1;

@@ -83,10 +83,10 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
-                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
-                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
-                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
-                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  WB_READY=%0b",
+                    cpu_inst.writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_operand_a_sel=%0h microcode_operand_b_sel=%0h",
+                    cpu_inst.microcode_rom_inst.alu_op, cpu_inst.microcode_rom_inst.operand_a_sel, cpu_inst.microcode_rom_inst.operand_b_sel);
                 $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
                     cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
                 $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
@@ -134,10 +134,10 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 50) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
-                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
-                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
-                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
-                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  WB_READY=%0b",
+                    cpu_inst.writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_operand_a_sel=%0h microcode_operand_b_sel=%0h",
+                    cpu_inst.microcode_rom_inst.alu_op, cpu_inst.microcode_rom_inst.operand_a_sel, cpu_inst.microcode_rom_inst.operand_b_sel);
                 $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
                     cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
                 $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
@@ -184,10 +184,10 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 80) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
-                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
-                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
-                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
-                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  WB_READY=%0b",
+                    cpu_inst.writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_operand_a_sel=%0h microcode_operand_b_sel=%0h",
+                    cpu_inst.microcode_rom_inst.alu_op, cpu_inst.microcode_rom_inst.operand_a_sel, cpu_inst.microcode_rom_inst.operand_b_sel);
                 $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
                     cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
                 $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
@@ -228,10 +228,10 @@ module cpu_tb;
             if (cycle_count >= 8 && cycle_count <= 100) begin
                 $display("CYCLE %0d: pc=%0d bus_addr=%0h bus_data_out=%0h bus_req=%0b bus_wr=%0b halt=%0b err=%0b",
                     cycle_count, cpu_inst.pc, bus_addr, bus_data_out, bus_req, bus_wr, halt_flag, error_flag);
-                $display("  WB_READY=%0b microcode_enable=%0b microcode_active=%0b microcode_writeback_ready=%0b",
-                    cpu_inst.writeback_ready, cpu_inst.microcode_seq_inst.enable, cpu_inst.microcode_seq_inst.micro_active, cpu_inst.microcode_seq_inst.micro_writeback_ready);
-                $display("  microcode_alu_op=%0h microcode_mem_op=%0h microcode_reg_b_read=%0h microcode_reg_c_read=%0h",
-                    cpu_inst.microcode_seq_inst.alu_op, cpu_inst.microcode_seq_inst.mem_op, cpu_inst.microcode_seq_inst.reg_b_read, cpu_inst.microcode_seq_inst.reg_c_read);
+                $display("  WB_READY=%0b",
+                    cpu_inst.writeback_ready);
+                $display("  microcode_alu_op=%0h microcode_operand_a_sel=%0h microcode_operand_b_sel=%0h",
+                    cpu_inst.microcode_rom_inst.alu_op, cpu_inst.microcode_rom_inst.operand_a_sel, cpu_inst.microcode_rom_inst.operand_b_sel);
                 $display("  bus_idle=%0b bus_request=%0b bus_wait=%0b bus_writeback=%0b reg_cache_stall=%0b ktable_waiting=%0b",
                     cpu_inst.bus_idle, cpu_inst.bus_request, cpu_inst.bus_wait, cpu_inst.bus_writeback, cpu_inst.reg_cache_inst.stall, cpu_inst.ktable_waiting);
                 $display("  alu_result_valid=%0b ktable_valid=%0b reg_cache_read_valid=%0b value_conv_valid=%0b",
