@@ -51,9 +51,11 @@ module cpu #(
 
     reg writeback_ready;
 
-    reg [31:0] ktable_data;
+    reg [63:0] ktable_data;
     reg ktable_valid;
     reg ktable_waiting;
+
+    reg [63:0] table_temp;
 
     wire [10:0] microcode_rom_addr;
 
@@ -91,7 +93,7 @@ module cpu #(
 
     wire [31:0] instr_rom_data;
 
-    wire [63:0] alu_operand_b;
+    var  [63:0] alu_operand_b;
     wire [63:0] alu_result;
     wire alu_result_valid;
     wire alu_div_zero_flag;
@@ -112,8 +114,23 @@ module cpu #(
     assign reg_cache_read_c_req = latched_enable && latched_operand_b_sel != 4'h0 && latched_operand_b_sel != 4'h3;
     assign reg_cache_read_offset = reg_cache_read_b_req ? instr_b : instr_a;
     assign reg_cache_read_c_offset = reg_cache_read_c_req ? instr_c : instr_a;
+    assign microcode_enable = 1;
 
-    assign alu_operand_b = (microcode_active && microcode_enable && microcode_reg_c_read == 4'h3) ? {ktable_data, ktable_data} : (microcode_reg_c_read != 4'h0 && microcode_reg_c_read != 4'h3) ? reg_cache_read_c_data : reg_cache_read_data;
+    always @(*) begin
+        alu_operand_b = reg_cache_read_data;
+        if (microcode_active) begin
+            /* verilator lint_off CASEINCOMPLETE */
+            case (microcode_operand_b_sel)
+                SOURCE_ZERO: alu_operand_b = 64'h0;
+                SOURCE_K_B, SOURCE_K_C, SOURCE_K_EXTRA: if (ktable_valid) alu_operand_b = ktable_data;
+                SOURCE_REG_A, SOURCE_REG_B, SOURCE_REG_C: if (reg_cache_read_c_valid) alu_operand_b = reg_cache_read_c_data;
+                SOURCE_SC: alu_operand_b = nan_box_integer({{24{instr_c[7]}},instr_c});
+                SOURCE_SAX: alu_operand_b = nan_box_integer({{8{instr_ax[23]}},instr_ax});
+                SOURCE_TEMPTABLE: alu_operand_b = table_temp;
+            endcase
+            /* verilator lint_on CASEINCOMPLETE */
+        end
+    end
 
     instr_rom instr_rom_inst (
         .clk(clk),
@@ -135,7 +152,7 @@ module cpu #(
         .read_c_valid(reg_cache_read_c_valid),
         .read_c_data(reg_cache_read_c_data),
         .write_req(0),
-        .write_data(0),
+        .write_data(alu_result),
         .bus_resp_valid(bus_ack && bus_rdy && bus_wr == 0),
         .bus_resp_data({bus_data_in, bus_data_in}),
         .cache_miss(reg_cache_cache_miss),
@@ -153,7 +170,7 @@ module cpu #(
         .alu_optype(microcode_alu_optype),
         .operand_a(b_operand_pipe),
         .operand_b(alu_operand_b),
-        .operand_c({ktable_data, ktable_data}),
+        .test_compare_k(instr_k),
         .immediate(microcode_immediate),
         .result(alu_result),
         .result_valid(alu_result_valid),
@@ -185,11 +202,8 @@ module cpu #(
         .dest(microcode_dest_sel),
         .operand_a_sel(microcode_operand_a_sel),
         .operand_b_sel(microcode_operand_b_sel),
-        .pc_op(),
-        .branch_op(),
-        .gc_op(),
-        .stack_op(),
-        .enable()
+        .pc_op(microcode_pc_op),
+        .stack_op()
     );
 
     stack_ptr stack_ptr_inst (
@@ -210,26 +224,13 @@ module cpu #(
 
     assign microcode_rom_addr = microcode_sequencer_addr;
 
-    reg [4:0] latched_alu_op;
-    reg [2:0] latched_dest;
-    reg [3:0] latched_operand_a_sel;
-    reg [3:0] latched_operand_b_sel;
-    reg [2:0] latched_mem_op_sel;
-    reg [2:0] latched_pc_op;
-    reg [1:0] latched_micro_branch;
-    reg [1:0] latched_gc_step;
-    reg [1:0] latched_stack_op;
     reg latched_enable;
     reg [33:0] latched_immediate;
     reg [7:0] latched_instr_a;
-    reg [7:0] latched_instr_b;
-    reg [7:0] latched_instr_c;
+    reg [3:0] latched_operand_a_sel;
+    reg [3:0] latched_operand_b_sel;
     reg [63:0] latched_b_operand_pipe;
     reg latched_reg_cache_read_valid;
-    reg latched_reg_cache_read_c_valid;
-    reg latched_alu_result_valid;
-    reg latched_ktable_valid;
-    reg [63:0] latched_ktable_data;
     reg [63:0] latched_value_conv_load_value;
     reg [1:0] latched_value_conv_load_value_valid;
 
@@ -249,78 +250,41 @@ module cpu #(
 
     always @(posedge clk) begin
         if (reset) begin
-            latched_alu_op <= 5'h0;
-            latched_dest <= 4'h0;
-            latched_operand_a_sel <= 4'h0;
-            latched_operand_b_sel <= 4'h0;
-            latched_mem_op_sel <= 3'h0;
-            latched_pc_op <= 3'h0;
-            latched_micro_branch <= 2'h1;
-            latched_gc_step <= 2'h0;
-            latched_stack_op <= 2'h0;
             latched_enable <= 1'b0;
             latched_immediate <= 34'h0;
             latched_instr_a <= 0;
-            latched_instr_b <= 0;
-            latched_instr_c <= 0;
+            latched_operand_a_sel <= 4'h0;
+            latched_operand_b_sel <= 4'h0;
             latched_b_operand_pipe <= 0;
             latched_reg_cache_read_valid <= 0;
-            latched_reg_cache_read_c_valid <= 0;
-            latched_alu_result_valid <= 0;
-            latched_ktable_valid <= 0;
-            latched_ktable_data <= 0;
             latched_value_conv_load_value <= 0;
             latched_value_conv_load_value_valid <= 0;
+            table_temp <= 0;
             value_conv_latched_value <= 0;
             value_conv_latched_valid <= 0;
         end else if (halt_flag || error_flag) begin
-            latched_alu_op <= 5'h0;
-            latched_dest <= 4'h0;
-            latched_operand_a_sel <= 4'h0;
-            latched_operand_b_sel <= 4'h0;
-            latched_mem_op_sel <= 3'h0;
-            latched_pc_op <= 3'h0;
-            latched_micro_branch <= 2'h1;
-            latched_gc_step <= 2'h0;
-            latched_stack_op <= 2'h0;
             latched_enable <= 1'b0;
             latched_immediate <= 34'h0;
             latched_instr_a <= 0;
-            latched_instr_b <= 0;
-            latched_instr_c <= 0;
+            latched_operand_a_sel <= 4'h0;
+            latched_operand_b_sel <= 4'h0;
             latched_b_operand_pipe <= 0;
             latched_reg_cache_read_valid <= 0;
-            latched_reg_cache_read_c_valid <= 0;
-            latched_alu_result_valid <= 0;
-            latched_ktable_valid <= 0;
-            latched_ktable_data <= 0;
             latched_value_conv_load_value <= 0;
+            table_temp <= 0;
         end else if (value_conv_load_value_valid) begin
             value_conv_latched_value <= value_conv_load_value;
             value_conv_latched_valid <= 1;
         end else if (bus_writeback) begin
             value_conv_latched_valid <= 0;
         end else if (microcode_writeback_ready && bus_idle && !bus_writeback && !bus_request && !bus_wait) begin
-            latched_alu_op <= microcode_alu_op;
-            latched_dest <= microcode_dest_sel;
-            latched_operand_a_sel <= microcode_source;
-            latched_operand_b_sel <= microcode_reg_c_read;
-            latched_mem_op_sel <= microcode_mem_op;
-            latched_pc_op <= microcode_pc_op;
-            latched_micro_branch <= microcode_micro_branch;
-            latched_gc_step <= microcode_gc_step;
-            latched_stack_op <= microcode_stack_op;
             latched_enable <= microcode_enable;
             latched_immediate <= microcode_immediate;
             latched_instr_a <= instr_a;
-            latched_instr_b <= instr_b;
-            latched_instr_c <= instr_c;
+            latched_operand_a_sel <= microcode_operand_a_sel;
+            latched_operand_b_sel <= microcode_operand_b_sel;
             latched_b_operand_pipe <= b_operand_pipe;
             latched_reg_cache_read_valid <= reg_cache_read_valid;
-            latched_reg_cache_read_c_valid <= reg_cache_read_c_valid;
-            latched_alu_result_valid <= alu_result_valid;
-            latched_ktable_valid <= ktable_valid;
-            latched_ktable_data <= ktable_data;
             latched_value_conv_load_value <= value_conv_load_value;
             latched_value_conv_load_value_valid <= value_conv_load_value_valid;
         end
@@ -333,13 +297,17 @@ module cpu #(
         end else if (halt_flag || error_flag) begin
             pc <= pc;
             instr_decoded <= 0;
-        end else if (microcode_active && microcode_pc_op == 3'h1) begin
+        end else if (microcode_active && microcode_pc_op == PC_SKIP) begin
             pc <= pc + 1;
             instr_decoded <= 0;
-        end else if (microcode_active && microcode_pc_op == 3'h2) begin
-            pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
+        end else if (microcode_active && microcode_pc_op == PC_SET) begin
+            if (microcode_dest_sel == DEST_PC && alu_result_valid) begin
+                pc <= alu_result[31:0];
+            end else begin
+                pc <= pc + {{15{microcode_immediate[16]}}, microcode_immediate[16:0]};
+            end
             instr_decoded <= 0;
-        end else if (writeback_ready && !reg_cache_stall && !ktable_waiting && !microcode_active) begin
+        end else if (writeback_ready && !reg_cache_stall && !ktable_waiting && !microcode_active && microcode_pc_op == PC_ADVANCE) begin
             instr_decoded <= 0;
             pc <= pc + 1;
         end
@@ -348,29 +316,18 @@ module cpu #(
     always @(posedge clk) begin
         if (reset) begin
             ir <= 0;
-            instr_a <= 0;
-            instr_b <= 0;
-            instr_c <= 0;
-            instr_bx <= 0;
-            instr_k <= 0;
-            opcode_key <= 0;
-            instr_ax <= 0;
             instr_decoded <= 0;
         end else if (halt_flag || error_flag) begin
             instr_decoded <= 0;
         end else if (!reg_cache_stall && !microcode_active && !ktable_waiting && !instr_decoded) begin
             ir <= instr_rom_data;
-            instr_a <= ir[23:16];
-            instr_b <= ir[15:8];
-            instr_c <= ir[7:0];
-            instr_bx <= {ir[23], ir[15:0]};
-            instr_k <= ir[6];
-            opcode_key <= ir[22:16];
             instr_decoded <= 1;
-        end else if (!reg_cache_stall && microcode_active && !ktable_waiting && opcode_key == 7'h04) begin
-            instr_ax <= instr_rom_data[24:0];
         end
     end
+
+    assign {instr_c, instr_b, instr_k, instr_a, opcode_key} = ir;
+    assign instr_bx = ir[31:16];
+    assign instr_ax = ir[31:7];
 
     always @(posedge clk) begin
         if (reset) begin
@@ -379,7 +336,7 @@ module cpu #(
         end else if (halt_flag || error_flag) begin
             b_operand_latch <= 0;
             b_operand_pipe <= 0;
-        end else if (reg_cache_read_valid && microcode_source != 4'h0) begin
+        end else if (reg_cache_read_valid && microcode_operand_a_sel != SOURCE_ZERO) begin
             b_operand_latch <= reg_cache_read_data;
         end else if (ktable_valid && microcode_mem_op == 3'h1) begin
             b_operand_latch <= {ktable_data, ktable_data};

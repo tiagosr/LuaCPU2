@@ -1,5 +1,112 @@
 /* verilator lint_off WIDTHEXPAND */
 /* verilator lint_off WIDTHTRUNC */
+
+parameter NaN_UPPER = 11'h7ff;
+parameter TAG_INTEGER = 20'hffff0;
+parameter TAG_TRUE = 20'hffffd;
+parameter TAG_FALSE = 20'hffffe;
+parameter TAG_NIL = 20'hfffff;
+
+
+function [63:0] nan_box_integer;
+    input [31:0] val;
+    begin
+        nan_box_integer = {val[31], NaN_UPPER, TAG_INTEGER, val};
+    end
+endfunction
+
+function [63:0] nan_box_bool;
+    input val_is_true;
+    begin
+        if (val_is_true)
+            nan_box_bool = {1'b0, NaN_UPPER, TAG_TRUE, 32'h00000001};
+        else
+            nan_box_bool = {1'b0, NaN_UPPER, TAG_FALSE, 32'h00000000};
+    end
+endfunction
+
+function [31:0] unbox_payload;
+    input [63:0] val;
+    begin
+        unbox_payload = val[31:0];
+    end
+endfunction
+
+function is_nan_boxed;
+    input [63:0] val;
+    begin
+        is_nan_boxed = val[62:52] == NaN_UPPER;
+    end
+endfunction
+
+function [19:0] get_type_tag;
+    input [63:0] val;
+    begin
+        get_type_tag = val[51:32];
+    end
+endfunction
+
+function is_integer;
+    input [63:0] val;
+    begin
+        is_integer = (is_nan_boxed(val) && get_type_tag(val) == TAG_INTEGER);
+    end
+endfunction
+
+function is_double;
+    input [63:0] val;
+    begin
+        is_double = !is_nan_boxed(val) ||
+                       (get_type_tag(val) != TAG_INTEGER &&
+                        get_type_tag(val) != TAG_TRUE &&
+                        get_type_tag(val) != TAG_FALSE &&
+                        get_type_tag(val) != TAG_NIL &&
+                        get_type_tag(val) != 20'hffff2);
+    end
+endfunction
+
+function is_boolean;
+    input [63:0] val;
+    begin
+        is_boolean = is_nan_boxed(val) && 
+                       (get_type_tag(val) == TAG_TRUE ||
+                        get_type_tag(val) == TAG_FALSE);
+    end
+endfunction
+
+function is_nil;
+    input [63:0] val;
+    begin
+        is_nil = is_nan_boxed(val) && (get_type_tag(val) == TAG_NIL);
+    end
+endfunction
+
+function is_double_zero;
+    input [63:0] val;
+    begin
+        is_double_zero = val == 63'h0;
+    end
+endfunction
+
+function is_int_zero;
+    input [63:0] val;
+    begin
+        is_int_zero = is_integer(val) && val[31:0] == 32'h0;
+    end
+endfunction
+
+
+function is_truthy;
+    input [63:0] val;
+    begin
+        is_truthy = !is_double_zero(val) && 
+                    !is_int_zero(val) &&
+                       (get_type_tag(val) != TAG_FALSE &&
+                        get_type_tag(val) != TAG_NIL);
+    end
+endfunction
+
+
 module value_conv #(
     localparam NaN_UPPER = 12'hfff,
     localparam TAG_INTEGER = 20'hffff0,

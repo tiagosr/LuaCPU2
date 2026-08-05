@@ -1,20 +1,14 @@
 /* verilator lint_off WIDTHEXPAND */
 /* verilator lint_off WIDTHTRUNC */
-module alu #(
-    localparam NaN_UPPER = 12'hfff,
-    localparam TAG_INTEGER = 20'hffff0,
-    localparam TAG_TRUE = 20'hffffd,
-    localparam TAG_FALSE = 20'hffffe,
-    localparam TAG_NIL = 20'hfffff
-)(
+module alu (
     input  wire clk,
     input  wire reset,
     input  wire [4:0] alu_op,
     input  wire [1:0] alu_optype,
     input  wire [63:0] operand_a,
     input  wire [63:0] operand_b,
-    input  wire [63:0] operand_c,
     input  wire [33:0] immediate,
+    input  wire test_compare_k,
     output reg [63:0] result,
     output reg [1:0] result_valid,
     output reg [1:0] zero_flag,
@@ -22,77 +16,6 @@ module alu #(
     output reg [1:0] type_error_flag
 );
 
-    function [63:0] nan_box_integer;
-        input [31:0] val;
-        begin
-            nan_box_integer = {NaN_UPPER, TAG_INTEGER, val};
-        end
-    endfunction
-
-    function [63:0] nan_box_bool;
-        input val_is_true;
-        begin
-            if (val_is_true)
-                nan_box_bool = {NaN_UPPER, TAG_TRUE, 32'h00000001};
-            else
-                nan_box_bool = {NaN_UPPER, TAG_FALSE, 32'h00000000};
-        end
-    endfunction
-
-    function [31:0] unbox_payload;
-        input [63:0] val;
-        begin
-            unbox_payload = val[31:0];
-        end
-    endfunction
-
-    function [19:0] get_type_tag;
-        input [63:0] val;
-        begin
-            get_type_tag = val[51:32];
-        end
-    endfunction
-
-    function is_integer;
-        input [63:0] val;
-        begin
-            is_integer = (get_type_tag(val) == TAG_INTEGER);
-        end
-    endfunction
-
-    function is_double;
-        input [63:0] val;
-        begin
-            is_double = (get_type_tag(val) != TAG_INTEGER &&
-                         get_type_tag(val) != TAG_TRUE &&
-                         get_type_tag(val) != TAG_FALSE &&
-                         get_type_tag(val) != TAG_NIL &&
-                         get_type_tag(val) != 20'hffff2);
-        end
-    endfunction
-
-    function is_boolean;
-        input [63:0] val;
-        begin
-            is_boolean = (get_type_tag(val) == TAG_TRUE ||
-                          get_type_tag(val) == TAG_FALSE);
-        end
-    endfunction
-
-    function is_nil;
-        input [63:0] val;
-        begin
-            is_nil = (get_type_tag(val) == TAG_NIL);
-        end
-    endfunction
-
-    function is_truthy;
-        input [63:0] val;
-        begin
-            is_truthy = (get_type_tag(val) != TAG_FALSE &&
-                         get_type_tag(val) != TAG_NIL);
-        end
-    endfunction
 
     reg [63:0] alu_next_result;
     reg alu_next_result_valid;
@@ -366,17 +289,17 @@ module alu #(
                 end
             end
 
-            ALU_LOADNIL: begin
+            ALU_NIL: begin
                 alu_next_result_valid = 1'b1;
                 alu_next_result = {NaN_UPPER, TAG_NIL, 32'h00000000};
             end
 
-            ALU_LOADFALSE: begin
+            ALU_FALSE: begin
                 alu_next_result_valid = 1'b1;
                 alu_next_result = nan_box_bool(1'b0);
             end
 
-            ALU_LOADTRUE: begin
+            ALU_TRUE: begin
                 alu_next_result_valid = 1'b1;
                 alu_next_result = nan_box_bool(1'b1);
             end

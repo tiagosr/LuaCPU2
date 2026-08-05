@@ -22,9 +22,9 @@ parameter ALU_CONCAT    = 5'h15;
 parameter ALU_MOD       = 5'h16;
 parameter ALU_POW       = 5'h17;
 parameter ALU_IDIV      = 5'h18;
-parameter ALU_LOADNIL   = 5'h19;
-parameter ALU_LOADFALSE = 5'h1A;
-parameter ALU_LOADTRUE  = 5'h1B;
+parameter ALU_NIL       = 5'h19;
+parameter ALU_FALSE     = 5'h1A;
+parameter ALU_TRUE      = 5'h1B;
 
 parameter ALUOPTYPE_NORMAL  = 2'b00;
 parameter ALUOPTYPE_BINARY = 2'b01;
@@ -63,3 +63,10 @@ parameter SOURCE_NEWTABLE   = 5'b10001; // {}
 parameter SOURCE_TEMP_REGK_C = 5'b10010; // temp table[R[C] or K[C]] (for OP_SELF R[B][RK[C]])
 parameter SOURCE_TEMP_C     = 5'b10011; // temp table[C] (for OP_SELF R[B][RK[C]])
 parameter SOURCE_PC         = 5'b11111;
+
+parameter PC_IDLE = 3'b000;
+parameter PC_ADVANCE = 3'b001;
+parameter PC_SKIP = 3'b010;
+parameter PC_SET = 3'b011;
+parameter PC_COND_SKIP = 3'b100;
+parameter PC_RETURN    = 3'b101;
